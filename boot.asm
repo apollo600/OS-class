@@ -33,6 +33,6 @@ ResetCursor:
     mov     dx, 0x0000
     int     10h
     ret
-BootMessage:             db    "NWPU"
+BootMessage:             db    "NWPU"	; some change
 times      510-($-$$)    db    0    ; 填充剩下的空间，使生成的二进制代码恰好为512字节
 dw         0xaa55                   ; 结束标志
