@@ -9,9 +9,9 @@
 ClearScreen:
     mov     ah, 0x06
     mov     al, 0
+    mov     bh, 0x0f
     mov     cx, 0
     mov     dx, 0xffff
-    mov     bh, 0
     int     10h
     ret
 DispScreen:
@@ -23,10 +23,6 @@ DispScreen:
     mov    dx, 0x1326
     int    10h               ; 10h 号中断
     ret
-SetCursor:
-    mov     ah, 0x01
-    mov     cx, 0x0300
-    int     10h
 ResetCursor:
     mov     ah, 0x02
     mov     bh, 0
