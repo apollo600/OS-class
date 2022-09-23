@@ -7,7 +7,7 @@
     ; 如果是短跳转(2字节，指令机器码以0xEB开头)，就需要后面加一个nop填充到3字节
     ; 如果是长跳转(3字节，指令机器码以0xE9开头)，就不需要添加nop了
     jmp    Main                         ; Start to boot.
-    ; nop                               ; 这个 nop 不可少
+    nop                               ; 这个 nop 不可少
 
     ; 下面是 FAT12 磁盘的头
     ; 正常情况下，boot是要对磁盘头的数据进行解析的
@@ -84,15 +84,19 @@ Message3                  db    "No Loader"    ; 9字节, 不够则用空格补�
 ; 作用:
 ;    显示一个字符串, 函数开始时 dh 中应该是字符串序号(从0开始)
 DispStr:
+    ; init stack
     push   bp
     mov    bp, sp
     pusha
     push   es
 
+    ; push the string to the end of stack
     mov    ax, MessageLength
     mul    dh
     add    ax, BootMessage
-    mov    bp, ax    
+    mov    bp, ax   
+
+    ; get the string using %bp calculated above
     mov    ax, ds        
     mov    es, ax            ; ES:BP = 串地址
     mov    cx, MessageLength ; CX = 串长度
@@ -101,6 +105,7 @@ DispStr:
     mov    dl, 0
     int    10h
 
+    ; recover the stack
     pop    es
     popa
     pop    bp
@@ -216,10 +221,10 @@ StringCmp:
     cld                           ; 清位保险一下
 .STARTCMP:
     lodsb                         ; ds:si -> al
-    cmp    al, byte [es:di]
+    cmp    al, byte [es:di]       ; same: ZF=1, diff:ZF=0
     jnz    .DIFFERENT
-    inc    di
-    dec    cx
+    inc    di                     ; -> di++
+    dec    cx                     ; -> cx--
     cmp    cx, 0
     jz     .SAME
     jmp    .STARTCMP

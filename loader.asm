@@ -1,9 +1,18 @@
 org	0400h
 
-	mov	ax, 0B800h
-	mov	gs, ax
-	mov	ah, 0Fh				; 0000: 黑底    1111: 白字
-	mov	al, 'L'
-	mov	[gs:((80 * 0 + 39) * 2)], ax	; 屏幕第 0 行, 第 39 列
+	;mov	ax, 0B800h
+	;mov	gs, ax
+	;mov	ah, 0Fh				; 0000: 黑底    1111: 白字
+	;mov	al, 'L'
+	;mov	[gs:((80 * 0 + 39) * 2)], ax	; 屏幕第 0 行, 第 39 列
+DispStr:
+	mov		ax, .BootMessage
+	mov		bp, ax
+	mov		ax, 0x1301
+	mov		bx, 0x0007
+	mov		cx, 26
+	mov		dx, 0x0200
+	int		10h
+.BootMessage: db "This is mengxiangyu's boot"
 
 	jmp	$				; 到此停住
