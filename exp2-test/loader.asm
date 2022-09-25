@@ -8,24 +8,32 @@ org	0400h
 	; 然后指定对应的行和列，列需要加上字符串的偏移量
 	mov ax, .BootMessage
 	mov bp, ax
-	mov cx, 6	; 字符串输出次数
-	mov dh, 2	; 行
-	mov dl, 39	; 列
+	mov cx, 0x1a	; 字符串输出次数 26
+	mov dh, 0x05	;  2 行
+	mov dl, 26		; 39 列
 
+.DispChar:
 	; 计算下标存储到ax先
-	mov	ax, 0x50
-	mul dh
-	add ax, dl
-	mul 0x02
-	mov di, ax
-	mov	ah, 0Fh	
-	mov	al, ES:[BP]
-	mov	[gs:di], ax	; 屏幕第 0 行, 第 39 列
-	
-	; inc BP
-	; mov	ah, 0Fh	
-	; mov	al, ES:[BP]
-	; mov	[gs:((80 * 2 + 39) * 2)], ax	; 屏幕第 0 行, 第 39 列
-.BootMessage: db "LOADER"
+	mov	ax, 0x50	; \80
+	mov bl, dh		; |* 行号
+	mul bl
+	mov bl, dl
+	add al, bl		; |+ 列号		
+	mov bl, 0x02
+	mul bl
+	mov bx, ax
+	mov	ah, 0x24	
+	mov	al, es:bp
+	mov	[gs:(bx)], ax	; 输出到屏幕
 
-	jmp	$				; 到此停住
+	inc dl
+	inc bp
+	dec cx
+	cmp cx, 0
+	jz	.DispFinished
+	jmp	.DispChar
+
+.DispFinished:
+	jmp $
+
+.BootMessage: db "This is mengxiangyu's boot"
