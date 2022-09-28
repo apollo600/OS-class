@@ -247,8 +247,9 @@ MyDisp:
     mov    ah, 0x0c             ; 设置输出内容
     ; 计算gs偏移量
     ; (80*2+di)*2
+    dec    di                   ; 减1转换一下
     mov    si, di
-    add    si, 0x00a0             ; 160
+    add    si, 0x00a0           ; 160
     shl    si, 1                ; * 2
     mov    [gs:si], ax          ; 输出
 
@@ -321,29 +322,16 @@ NoLoader:
 LoaderFound:                     ; 找到 LOADER.BIN 后便来到这里继续
     add     di, 01Ah              ; 0x1a = 28 这个 28 在目录项里偏移量对应的数据是起始簇号（RTFM）
     mov     dx, word [es:di]      ; 起始簇号占2字节，读入到dx里
+    mov     di, 0               ; 清空保险一下，奇怪的bug
+    mov     di, 4
     ; ===
 .Disp:
-    mov     di, 0
-
-    mov     di, 3
-    shr     dx, 0
-    mov     al, dl
+    mov     ax, dx
     call    MyDisp
-
-    mov     di, 2
     shr     dx, 4
-    mov     al, dl
-    call    MyDisp
-
-    mov     di, 1
-    shr     dx, 4
-    mov     al, dl
-    call    MyDisp
-
-    mov     di, 0
-    shr     dx, 4
-    mov     al, dl
-    call    MyDisp
+    dec     di
+    cmp     di, 0
+    jnz     .Disp
     ; ===
 jmp     $
 ;     mov     bx, OffsetOfLoader    ; es:bx = BaseOfLoader:OffsetOfLoader  
