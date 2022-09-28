@@ -61,11 +61,12 @@ BufferPacket              times 010h db 0
 ; ===================================================
 ; 子函数
 ; ===================================================
+
 ;----------------------------------------------------------------------------
 ; 函数名: DispStr
 ;----------------------------------------------------------------------------
 ; 作用:
-;    显示一个字符串, 通过指定 dh 确定输出字符串的序号(从0开始)
+;    显示一个字符串, 函数开始时 dh 中应该是字符串序号(从0开始)
 DispStr:
     ; init stack
     push   bp
@@ -79,38 +80,21 @@ DispStr:
     add    ax, BootMessage
     mov    bp, ax   
 
-;====================
-; cx: length
-; dh: row
-; dl: column
-; es:bp: offset of string
-; bl: color
+    ; get the string using %bp calculated above
+    mov    ax, ds        
+    mov    es, ax            ; ES:BP = 串地址
+    mov    cx, MessageLength ; CX = 串长度
+    mov    ax, 01301h        ; AH = 13,  AL = 01h
+    mov    bx, 0007h         ; 页号为0(BH = 0) 黑底白字(BL = 07h)
+    mov    dl, 0
+    int    10h
 
-    push   bp
-    mov    bp, sp
-    pusha
-    push   es
-
-    mov     ax, 0xB800
-    mov     gs, ax
-
-DispChar:
-    mov     ah, 0x07
-    mov     al, es:bp
-    
-    mov	    [gs:((80 * [dh] + [dl]) * 2)], ax
-    inc     bp
-    dec     cx
-    cmp     cx, 0
-    jz      DispFinished    ; 如果输出完毕
-    jmp     DispChar        ; 输出下一个字符
-DispFinished:
+    ; recover the stack
     pop    es
     popa
     pop    bp
     ret
 
-;====================
 ;----------------------------------------------------------------------------
 ; 函数名: DispDot
 ;----------------------------------------------------------------------------
@@ -121,16 +105,15 @@ DispDot:
     mov    bp, sp
     pusha
 
-    mov     ah, 0x07
-    mov     al, '.'
-    mov	    [gs:((80 * 0 + 39) * 2)], ax
-    jmp     DispChar        ; 输出下一个字符
+    mov    ah, 0Eh       ; `. 每读一个扇区就在 "Booting  " 后面
+    mov    al, '.'       ;  | 打一个点, 形成这样的效果:
+    mov    bl, 0Fh       ;  | Booting ......
+    int    10h           ; /
 
     popa
     pop    bp
     ret
-    
-;----------------------------------------------------------------------------
+
 ; 函数名: ReadSector
 ;----------------------------------------------------------------------------
 ; 作用:
@@ -238,6 +221,54 @@ StringCmp:
     pop    bp
     ret
 
+MyDisp:
+    pusha
+    
+    ; 不使用bx, dx进行输出操作
+    ; cx作为中转寄存器
+    ; di作为列号
+    ; =============================================
+    dec    di
+    and    al, 0x0f             ; 取寄存器后4位
+    ;mov    dx, ax               ; dx暂存返回结果 
+    cmp    al, 9                ; ah即为余数
+    jnc    .Char                ; 大于9,为字母
+
+.Num:
+    add    al, 0x30             ; 数字+48
+    mov    bx, 0xb800
+    mov    gs, bx               ; 初始化gs地址
+    mov    ah, 0x0c             ; 设置输出内容
+    
+    ; 计算gs偏移量
+    ; (80*2+di)*2
+    mov    bx, di
+    add    bx, 0xa0             ; 160
+    shl    bx, 1                ; * 2
+    mov    [gs:bx], ax          ; 输出
+
+    jmp    .End
+
+.Char:
+    add    al, 0x37             ; 字母+55
+    mov    bx, 0xb800           
+    mov    gs, bx               ; 初始化gs地址
+    mov    ah, 0x0c             ; 设置输出内容
+    
+    ; 计算gs偏移量
+    ; (80*2+di)*2
+    mov    bx, di
+    add    bx, 0xa0             ; 160
+    shl    bx, 1                ; * 2
+    mov    [gs:bx], ax          ; 输出
+
+    jmp    .End
+
+.End:
+    popa
+    ret
+; ============================================= 
+
 ; ===================================================
 ; 主函数
 ; ===================================================
@@ -301,32 +332,51 @@ NoLoader:
 LoaderFound:                     ; 找到 LOADER.BIN 后便来到这里继续
     add     di, 01Ah              ; 0x1a = 28 这个 28 在目录项里偏移量对应的数据是起始簇号（RTFM）
     mov     dx, word [es:di]      ; 起始簇号占2字节，读入到dx里
-    mov     bx, OffsetOfLoader    ; es:bx = BaseOfLoader:OffsetOfLoader  
+    ; ===
+    mov     di, 4
+.Disp:
+    ; mov     dx, cx
+    mov     ax, dx
+    
+    call MyDisp
+    
+    dec     di
+    shr     dx, 4
+    cmp     di, 0
+    jnz     .Disp
+    ; ===
+jmp     $
+;     mov     bx, OffsetOfLoader    ; es:bx = BaseOfLoader:OffsetOfLoader  
+    
 
-LoadLoader:
-	; call   DispDot
-    mov    ax, dx                ; ax <- 数据区簇号
-    add    ax, DeltaSectorNo     ; 数据区的簇号需要加上一个偏移量才能得到真正的扇区号
-    mov    cx, 1                 ; 一个簇就仅有一个扇区
-    call   ReadSector
-    mov    ax, dx                ; ax <- 数据区簇号（在之前ax = 数据区簇号+偏移量）
-    call   GetNextCluster        ; 根据数据区簇号获取文件下一个簇的簇号
-    mov    dx, ax                ; dx <- 下一个簇的簇号
-    cmp    dx, 0FFFh             ; 判断是否读完了（根据文档理论上dx只要在0xFF8~0xFFF都行，但是这里直接偷懒只判断0xFFF）
-    jz     LoadFinished
-    add    bx, [BPB_BytsPerSec]  ; 别忘了更新bx，否则你会发现文件发生复写的情况（指来回更新BaseOfLoader:OffsetOfLoader ~ BaseOfLoader:OffsetOfLoader+0x200）
-    jmp    LoadLoader
+; LoadLoader:
+; 	; call   DispDot
+;     mov    ax, dx                ; ax <- 数据区簇号
+;     add    ax, DeltaSectorNo     ; 数据区的簇号需要加上一个偏移量才能得到真正的扇区号
+;     mov    cx, 1                 ; 一个簇就仅有一个扇区
+;     ; call   ReadSector
+    
+;     call   MyDisp
 
-LoadFinished:
-    mov     ax, .BootMessage
-.BootMessage:   db "Ready."
-    mov     bp, ax
-    mov     bx, 000ch
-    mov     cx, 6
-    mov     dh, 1
-    mov     dl, 0
-    call    DispStr
-	jmp	    $				 ; 到此停住
+;     mov    ax, dx            
+;     call   GetNextCluster        ; 根据数据区簇号获取文件下一个簇的簇号
+;     mov    dx, ax                ; dx <- 下一个簇的簇号
+;     cmp    dx, 0FFFh             ; 判断是否读完了（根据文档理论上dx只要在0xFF8~0xFFF都行，但是这里直接偷懒只判断0xFFF）
+;     jz     LoadFinished
+;     add    bx, [BPB_BytsPerSec]  ; 别忘了更新bx，否则你会发现文件发生复写的情况（指来回更新BaseOfLoader:OffsetOfLoader ~ BaseOfLoader:OffsetOfLoader+0x200）
+;     jmp    LoadLoader
+;     inc    di
+
+; LoadFinished:
+;     mov     ax, .BootMessage
+; .BootMessage:   db "Ready."
+;     mov     bp, ax
+;     mov     bx, 000ch
+;     mov     cx, 6
+;     mov     dh, 1
+;     mov     dl, 0
+;     call    DispStr
+; 	jmp	    $				 ; 到此停住
 ; ===================================================
 
 
