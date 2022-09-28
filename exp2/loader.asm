@@ -221,51 +221,40 @@ StringCmp:
     pop    bp
     ret
 
-MyDisp:
+MyDisp:  
+    push   bp
+    mov    bp, sp
     pusha
     
     ; 不使用bx, dx进行输出操作
     ; cx作为中转寄存器
     ; di作为列号
-    ; =============================================
-    dec    di
     and    al, 0x0f             ; 取寄存器后4位
-    ;mov    dx, ax               ; dx暂存返回结果 
-    cmp    al, 9                ; ah即为余数
+    cmp    al, 9                
     jnc    .Char                ; 大于9,为字母
 
 .Num:
-    add    al, 0x30             ; 数字+48
-    mov    bx, 0xb800
-    mov    gs, bx               ; 初始化gs地址
-    mov    ah, 0x0c             ; 设置输出内容
-    
-    ; 计算gs偏移量
-    ; (80*2+di)*2
-    mov    bx, di
-    add    bx, 0xa0             ; 160
-    shl    bx, 1                ; * 2
-    mov    [gs:bx], ax          ; 输出
-
-    jmp    .End
+    add    al, 0x30             ; 数字+48      
+    jmp    .Out
 
 .Char:
     add    al, 0x37             ; 字母+55
-    mov    bx, 0xb800           
+    jmp    .Out
+
+.Out:
+    mov    bx, 0xb800
     mov    gs, bx               ; 初始化gs地址
     mov    ah, 0x0c             ; 设置输出内容
-    
     ; 计算gs偏移量
     ; (80*2+di)*2
-    mov    bx, di
-    add    bx, 0xa0             ; 160
-    shl    bx, 1                ; * 2
-    mov    [gs:bx], ax          ; 输出
-
-    jmp    .End
+    mov    si, di
+    add    si, 0x00a0             ; 160
+    shl    si, 1                ; * 2
+    mov    [gs:si], ax          ; 输出
 
 .End:
     popa
+    pop    bp
     ret
 ; ============================================= 
 
@@ -333,17 +322,28 @@ LoaderFound:                     ; 找到 LOADER.BIN 后便来到这里继续
     add     di, 01Ah              ; 0x1a = 28 这个 28 在目录项里偏移量对应的数据是起始簇号（RTFM）
     mov     dx, word [es:di]      ; 起始簇号占2字节，读入到dx里
     ; ===
-    mov     di, 4
 .Disp:
-    ; mov     dx, cx
-    mov     ax, dx
-    
-    call MyDisp
-    
-    dec     di
+    mov     di, 0
+
+    mov     di, 3
+    shr     dx, 0
+    mov     al, dl
+    call    MyDisp
+
+    mov     di, 2
     shr     dx, 4
-    cmp     di, 0
-    jnz     .Disp
+    mov     al, dl
+    call    MyDisp
+
+    mov     di, 1
+    shr     dx, 4
+    mov     al, dl
+    call    MyDisp
+
+    mov     di, 0
+    shr     dx, 4
+    mov     al, dl
+    call    MyDisp
     ; ===
 jmp     $
 ;     mov     bx, OffsetOfLoader    ; es:bx = BaseOfLoader:OffsetOfLoader  
