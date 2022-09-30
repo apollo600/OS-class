@@ -75,7 +75,7 @@ Message2                  db    "Read Fail"    ; 9字节, 不够则用空格补�
 Message3                  db    "No Loader"    ; 9字节, 不够则用空格补齐. 序号 3
 ;============================================================================
 ; 汇编并不像高级语言一样规范，寄存器忘保存，调用子函数后发现值变了可太痛苦了
-; 所以为了减少这份痛苦，这里的所有函数都保证函数除了返回值寄存器其余的主要寄存器都有"保护现场"
+; 所以为了减少这份痛苦，这里的所有函数都保证函数除了返回值寄存器其余的主要寄存器都有保护现场
 ; 保证调用之后不用担心寄存器值变了
 
 ;----------------------------------------------------------------------------
@@ -84,19 +84,15 @@ Message3                  db    "No Loader"    ; 9字节, 不够则用空格补�
 ; 作用:
 ;    显示一个字符串, 函数开始时 dh 中应该是字符串序号(从0开始)
 DispStr:
-    ; init stack
     push   bp
     mov    bp, sp
     pusha
     push   es
 
-    ; push the string to the end of stack
     mov    ax, MessageLength
     mul    dh
     add    ax, BootMessage
-    mov    bp, ax   
-
-    ; get the string using %bp calculated above
+    mov    bp, ax    
     mov    ax, ds        
     mov    es, ax            ; ES:BP = 串地址
     mov    cx, MessageLength ; CX = 串长度
@@ -105,7 +101,6 @@ DispStr:
     mov    dl, 0
     int    10h
 
-    ; recover the stack
     pop    es
     popa
     pop    bp
@@ -221,10 +216,10 @@ StringCmp:
     cld                           ; 清位保险一下
 .STARTCMP:
     lodsb                         ; ds:si -> al
-    cmp    al, byte [es:di]       ; same: ZF=1, diff:ZF=0
+    cmp    al, byte [es:di]
     jnz    .DIFFERENT
-    inc    di                     ; -> di++
-    dec    cx                     ; -> cx--
+    inc    di
+    dec    cx
     cmp    cx, 0
     jz     .SAME
     jmp    .STARTCMP
