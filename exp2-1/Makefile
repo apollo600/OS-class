@@ -10,7 +10,7 @@ FILE:=aAl.txt
 
 .PHONY : everything
 
-everything : $(BOOT_BIN) $(LDR_BIN) $(FILE)
+everything : $(BOOT_BIN) $(LDR_BIN)
 	@dd if=/dev/zero of=a.img bs=512 count=2880
 	@mkfs -t vfat a.img
 	@dd if=/dev/zero of=$(FILE) bs=512 count=8

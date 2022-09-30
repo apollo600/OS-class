@@ -60,7 +60,8 @@ OutputIndex				  dw	0x03
 ;============================================================================
 ;字符串
 ;----------------------------------------------------------------------------
-LoaderFileName            db    "LOADER  BIN", 0  ; LOADER.BIN 的文件名(为什么中间有空格请RTFM)
+; LoaderFileName            db    "LOADER  BIN", 0  ; LOADER.BIN 的文件名(为什么中间有空格请RTFM)
+LoaderFileName            db    "AAL     TXT", 0
 ; 为简化代码, 下面每个字符串的长度均为 MessageLength
 MessageLength             equ    9
 BootMessage:              db    "Booting  "    ; 9字节, 不够则用空格补齐. 序号 0
@@ -235,7 +236,7 @@ MyDisp:
     pusha    
     ; 输出ax, cx作为列号
     and    al, 0x0f             ; 取寄存器后4位
-    cmp    al, 9                
+    cmp    al, 0xa                
     jnc    .Char                ; 大于9,为字母
 .Num:
     add    al, 0x30             ; 数字+48      
