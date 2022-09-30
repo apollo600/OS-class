@@ -52,8 +52,8 @@ BootMessage:              db    "Booting  "    ; 9字节, 不够则用空格补�
 Message1                  db    "Ready.   "    ; 9字节, 不够则用空格补齐. 序号 1
 Message2                  db    "Read Fail"    ; 9字节, 不够则用空格补齐. 序号 2
 Message3                  db    "No Loader"    ; 9字节, 不够则用空格补齐. 序号 3
-Message4				  db	"Searching"	   ; 9字节, 不够则用空格补齐. 序号 4
-Message5				  db	"ClusNum: "	   ; 9字节, 不够则用空格补齐. 序号 5
+Message4				  db	"Pass     "	   ; 9字节, 不够则用空格补齐. 序号 4
+Message5				  db	"FUCK OVER"	   ; 9字节, 不够则用空格补齐. 序号 5
 
 LeftRootDirSectors        dw    RootDirSectors          ; 还未搜索的根目录扇区数
 RootDirSectorNow          dw    SectorNoOfRootDirectory ; 目前正在搜索的根目录扇区
@@ -270,15 +270,6 @@ Main:
     mov    es, ax                ; es <- BaseOfLoader
     mov    sp, BaseOfStack       ; 这几个段寄存器在Main里都不会变了
 
-    mov     ax, .BootMessage
-.BootMessage:   db "TestOutput"
-    mov     bp, ax
-    mov     bx, 000ch
-    mov     cx, 10
-    mov     dh, 2
-    mov     dl, 0
-    call    DispStr
-
     jmp     $
 
 FindLoaderInRootDir:
@@ -286,6 +277,9 @@ FindLoaderInRootDir:
     mov    bx, OffsetOfLoader    ; es:bx = BaseOfLoader:OffsetOfLoader  
     mov    cx, 1
     call   ReadSector
+
+    mov    dh, 4
+    call   DispStr
 
     mov    si, LoaderFileName    ; ds:si -> "LOADER  BIN"
     mov    di, OffsetOfLoader    ; es:di -> BaseOfLoader:400h = BaseOfLoader*10h+400h
@@ -309,17 +303,13 @@ GotoNextRootDirSector:
     jmp    FindLoaderInRootDir
 
 NoLoader:
-    mov     ax, .BootMessage
-.BootMessage:   db "No Loader"
-    mov     bp, ax
-    mov     bx, 000ch
-    mov     cx, 9
-    mov     dh, 1
-    mov     dl, 0
+    mov     dh, 3
     call    DispStr
     jmp     $
 
 LoaderFound:                     ; 找到 LOADER.BIN 后便来到这里继续
+    mov     dh, 5
+    call    DispStr
     add     di, 01Ah              ; 0x1a = 28 这个 28 在目录项里偏移量对应的数据是起始簇号（RTFM）
     mov     dx, word [es:di]      ; 起始簇号占2字节，读入到dx里
     mov     di, 0               ; 清空保险一下，奇怪的bug
@@ -356,14 +346,6 @@ jmp     $
 ;     inc    di
 
 ; LoadFinished:
-;     mov     ax, .BootMessage
-; .BootMessage:   db "Ready."
-;     mov     bp, ax
-;     mov     bx, 000ch
-;     mov     cx, 6
-;     mov     dh, 1
-;     mov     dl, 0
-;     call    DispStr
 ; 	jmp	    $				 ; 到此停住
 ; ===================================================
 

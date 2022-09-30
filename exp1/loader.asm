@@ -21,8 +21,8 @@ org	0400h
 	mul bl
 	mov bx, ax
 	mov	ah, 0x0c	
-	mov	al, es:bp
-	mov	[gs:(bx)], ax	; 输出到屏幕
+	mov	al, [es:bp]
+	mov	[gs:bx], ax	; 输出到屏幕
 
 	inc dl
 	inc bp
