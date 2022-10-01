@@ -359,12 +359,10 @@ LoadLoader:
     
 	push	bp
 	mov		bp, sp
-	pusha
-	; mov		dh, 4
-	; call	DispStr
+	pusha                           ; 保护现场
 	mov		ax, [OutputIndex]
 	add		ax, 0x0a
-	mov		[OutputIndex], ax
+	mov		[OutputIndex], ax       ; 将输出位置向后移动5个word
 	popa
 	pop		bp
 
