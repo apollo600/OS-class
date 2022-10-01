@@ -56,12 +56,12 @@ DeltaSectorNo             equ 31
 LeftRootDirSectors        dw    RootDirSectors          ; 还未搜索的根目录扇区数
 RootDirSectorNow          dw    SectorNoOfRootDirectory ; 目前正在搜索的根目录扇区
 BufferPacket              times 010h db 0               ; ReadSector函数会用到的，用于向int 13h中断的一个缓冲区
-OutputIndex				  dw	0x03
+OutputIndex				  dw	0x02
 ;============================================================================
 ;字符串
 ;----------------------------------------------------------------------------
-; LoaderFileName            db    "LOADER  BIN", 0  ; LOADER.BIN 的文件名(为什么中间有空格请RTFM)
-LoaderFileName            db    "AAL     TXT", 0
+LoaderFileName            db    "LOADER  BIN", 0  ; LOADER.BIN 的文件名(为什么中间有空格请RTFM)
+; LoaderFileName            db    "AAL     TXT", 0
 ; 为简化代码, 下面每个字符串的长度均为 MessageLength
 MessageLength             equ    9
 BootMessage:              db    "Booting  "    ; 9字节, 不够则用空格补齐. 序号 0
@@ -339,7 +339,7 @@ LoadLoader:
 	push	bp
 	mov		bp, sp
 	pusha
-    mov     cx, 4
+    mov     cx, 3
 .Loop:
     mov     ax, dx
     call    MyDisp
@@ -361,7 +361,7 @@ LoadLoader:
 	mov		bp, sp
 	pusha                           ; 保护现场
 	mov		ax, [OutputIndex]
-	add		ax, 0x0a
+	add		ax, 0x07
 	mov		[OutputIndex], ax       ; 将输出位置向后移动5个word
 	popa
 	pop		bp
