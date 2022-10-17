@@ -74,6 +74,12 @@ typedef struct elf32_phdr {
 #define EM_MIPS_RS3_LE	10	/* MIPS R3000 little-endian */
 /* ... */
 
+/* Legal values for p_flags (segment flags).  */
+
+#define PF_X		(1 << 0)	/* Segment is executable */
+#define PF_W		(1 << 1)	/* Segment is writable */
+#define PF_R		(1 << 2)	/* Segment is readable */
+
 /*
  * 显示相关
  */
@@ -162,6 +168,7 @@ num_to_char(u32 num, u8 *res, u8 radix) {
 	}
 	for (u16 i = 0; i < count; i++)
 		res[i] = tmp[count-1-i];
+	res[count] = '\0';
 	return count;
 }
 
@@ -208,8 +215,8 @@ load_kernel()
 		write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
 	u16 phnum = kernel_ehdr->e_phnum;
 	u8 phnum_char[10];
-	u16 phnum_char_len = num_to_char(phnum, phnum_char, 10);
-	for (u8 *s = phnum_char, *st = s; s - st < phnum_char_len; s++)
+	num_to_char(phnum, phnum_char, 10);
+	for (u8 *s = phnum_char, *st = s; *s; s++)
 		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | *s);
 	// 开始的地址
 	global_line = 6;
@@ -218,8 +225,8 @@ load_kernel()
 		write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
 	Elf32_Off paddr = (Elf32_Off)((void *)kernel_ehdr + kernel_phdr->p_offset);
 	u8 paddr_char[10];
-	u16 paddr_char_len = num_to_char(paddr, paddr_char, 16);
-	for (u8 *s = paddr_char, *st = s; s - st < paddr_char_len; s++)
+	num_to_char(paddr, paddr_char, 16);
+	for (u8 *s = paddr_char, *st = s; *s; s++)
 		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | *s);
 	// 加载的长度(filesize)
 	global_line = 7;
@@ -233,8 +240,8 @@ load_kernel()
 		pmemsz += kernel_phdr->p_memsz;
 	}
 	u8 pfilesz_char[10];
-	u16 pfilesz_char_len = num_to_char(pfilesz, pfilesz_char, 10);
-	for (u8 *s = pfilesz_char, *st = s; s - st < pfilesz_char_len; s++)
+	num_to_char(pfilesz, pfilesz_char, 10);
+	for (u8 *s = pfilesz_char, *st = s; *s; s++)
 		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | *s);
 	
 	// 加载的长度(memsize)
@@ -243,9 +250,23 @@ load_kernel()
 	for (char *s = "-- pmemsz: ", *st = s; *s; s++, line_index++)
 		write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
 	u8 pmemsz_char[10];
-	u16 pmemsz_char_len = num_to_char(pmemsz, pmemsz_char, 10);
-	for (u8 *s = pmemsz_char, *st = s; s - st < pmemsz_char_len; s++)
+	num_to_char(pmemsz, pmemsz_char, 10);
+	for (u8 *s = pmemsz_char, *st = s; *s; s++)
 		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | *s);
+	
+	// 每个段的权限设置
+	global_line = 9;
+	line_index = 0;
+	for (char *s = "-- pflags: ", *st = s; *s; s++, line_index++)
+		write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
+	kernel_phdr = (void *)kernel_ehdr + kernel_ehdr->e_phoff; // 复原
+	for (u32 i = 0; i < kernel_ehdr->e_phnum; i++, kernel_phdr++) {
+		char t_content = phdr->pflags == PF_X ? 'X' : phdr->pflags == PF_R ? 'W' : 'R';
+		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | t_content);
+		line_index++;
+		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | ' ');
+		line_index++;
+	}
 
 	// 执行kernel程序
 	kernel_phdr = (void *)kernel_ehdr + kernel_ehdr->e_phoff; // 复原
