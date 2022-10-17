@@ -208,6 +208,7 @@ load_kernel()
 	line_index = 0;
 	for (char *s = "Program session: ", *st = s; *s; s++, line_index++)
 		write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
+	
 	// 数量
 	global_line = 5;
 	line_index = 0;
@@ -218,6 +219,7 @@ load_kernel()
 	num_to_char(phnum, phnum_char, 10);
 	for (u8 *s = phnum_char, *st = s; *s; s++)
 		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | *s);
+	
 	// 开始的地址
 	global_line = 6;
 	line_index = 0;
@@ -228,6 +230,7 @@ load_kernel()
 	num_to_char(paddr, paddr_char, 16);
 	for (u8 *s = paddr_char, *st = s; *s; s++)
 		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | *s);
+	
 	// 加载的长度(filesize)
 	global_line = 7;
 	line_index = 0;
