@@ -261,10 +261,10 @@ load_kernel()
 		write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
 	kernel_phdr = (void *)kernel_ehdr + kernel_ehdr->e_phoff; // 复原
 	for (u32 i = 0; i < kernel_ehdr->e_phnum; i++, kernel_phdr++) {
-		char t_content = phdr->pflags == PF_X ? 'X' : phdr->pflags == PF_R ? 'W' : 'R';
-		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | t_content);
+		char t_content = kernel_phdr->p_flags == PF_X ? 'X' : kernel_phdr->p_flags == PF_R ? 'W' : 'R';
+		write_to_terminal(global_line*80 + line_index, DEFAULT_COLOR | t_content);
 		line_index++;
-		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | ' ');
+		write_to_terminal(global_line*80 + line_index, DEFAULT_COLOR | ' ');
 		line_index++;
 	}
 
