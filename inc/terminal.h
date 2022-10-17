@@ -36,6 +36,7 @@
  * 终端默认色，黑底白字
  */
 #define DEFAULT_COLOR FOREGROUND(WHITE) | BACKGROUND(BLACK)
+#define GET_COLOR(fore_ground, back_ground) FOREGROUND(fore_ground) | BACKGROUND(back_ground)
 
 void clear_screen();
 void kprintf(u16 disp_pos, const char* format, ...);

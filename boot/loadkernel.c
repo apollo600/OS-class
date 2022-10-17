@@ -59,6 +59,21 @@ typedef struct elf32_phdr {
 	Elf32_Word	p_align;
 } Elf32_Phdr;
 
+/* Legal values for e_machine (architecture).  */
+
+#define EM_NONE		 0	/* No machine */
+#define EM_M32		 1	/* AT&T WE 32100 */
+#define EM_SPARC	 2	/* SUN SPARC */
+#define EM_386		 3	/* Intel 80386 */
+#define EM_68K		 4	/* Motorola m68k family */
+#define EM_88K		 5	/* Motorola m88k family */
+#define EM_IAMCU	 6	/* Intel MCU */
+#define EM_860		 7	/* Intel 80860 */
+#define EM_MIPS		 8	/* MIPS R3000 big-endian */
+#define EM_S370		 9	/* IBM System/370 */
+#define EM_MIPS_RS3_LE	10	/* MIPS R3000 little-endian */
+/* ... */
+
 /*
  * 显示相关
  */
@@ -66,6 +81,9 @@ typedef struct elf32_phdr {
 #define TERMINAL_ROW	25
 
 #define TERMINAL_POS(row, column) ((u16)(row) * TERMINAL_COLUMN + (column))
+
+#define NUM_TO_ASCII 48
+#define CHAR_TO_ASCII 55
 /*
  * 终端默认色，黑底白字
  */
@@ -132,19 +150,105 @@ memcpy(void *dst, const void *src, size_t n)
 	return dst;
 }
 
+u16 
+num_to_char(u32 num, u8 *res, u8 radix) {
+	u8 tmp[10];
+	u16 count = 0;
+	while (num != 0) {
+		tmp[count] = num % radix;
+		tmp[count] += tmp[count] < 10 ? NUM_TO_ASCII : CHAR_TO_ASCII; 
+		count++;
+		num /= radix;
+	}
+	for (u16 i = 0; i < count; i++)
+		res[i] = tmp[count-1-i];
+	return count;
+}
+
 /*
  * 初始化函数，加载kernel.bin的elf文件并跳过去。
  */
 void 
 load_kernel()
 {
+	u32 global_line = 0;
+	u32 line_index = 0;
+	
 	clear_screen();
 	for (char *s = "----start loading kernel elf----", *st = s; *s; s++)
-		write_to_terminal(s - st, DEFAULT_COLOR | *s);
+		write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
 
 	Elf32_Ehdr *kernel_ehdr = (Elf32_Ehdr *)KERNEL_ELF;
-
 	Elf32_Phdr *kernel_phdr = (void *)kernel_ehdr + kernel_ehdr->e_phoff;
+
+	// 读取'ELF'
+	global_line = 2;
+	line_index = 0;
+	for (char *s = "File type: ", *st = s; *s; s++, line_index++)
+		write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
+	for (u8 i = 1; i < 4; i++)
+		write_to_terminal(i - 1 + line_index + global_line*80, DEFAULT_COLOR | (u8)kernel_ehdr->e_ident[i]);
+
+	// 读取'i386'
+	global_line = 3;
+	line_index = 0;
+	if (kernel_ehdr->e_machine == EM_386)
+		for (char *s = "Machine type: Intel 80386", *st = s; *s; s++, line_index++)
+			write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
+	
+	// 输出程序段数量、在内存中开始的地址、加载的长度、每个段的读/写/可执行标志
+	global_line = 4;
+	line_index = 0;
+	for (char *s = "Program session: ", *st = s; *s; s++, line_index++)
+		write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
+	// 数量
+	global_line = 5;
+	line_index = 0;
+	for (char *s = "-- phnum: ", *st = s; *s; s++, line_index++)
+		write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
+	u16 phnum = kernel_ehdr->e_phnum;
+	u8 phnum_char[10];
+	u16 phnum_char_len = num_to_char(phnum, phnum_char, 10);
+	for (u8 *s = phnum_char, *st = s; s - st < phnum_char_len; s++)
+		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | *s);
+	// 开始的地址
+	global_line = 6;
+	line_index = 0;
+	for (char *s = "-- paddr: ", *st = s; *s; s++, line_index++)
+		write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
+	Elf32_Off paddr = (Elf32_Off)((void *)kernel_ehdr + kernel_phdr->p_offset);
+	u8 paddr_char[10];
+	u16 paddr_char_len = num_to_char(paddr, paddr_char, 16);
+	for (u8 *s = paddr_char, *st = s; s - st < paddr_char_len; s++)
+		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | *s);
+	// 加载的长度(filesize)
+	global_line = 7;
+	line_index = 0;
+	for (char *s = "-- pfilesz: ", *st = s; *s; s++, line_index++)
+		write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
+	Elf32_Word pfilesz = 0;
+	Elf32_Word pmemsz = 0;
+	for (u32 i = 0; i < kernel_ehdr->e_phnum; i++, kernel_phdr++) {
+		pfilesz += kernel_phdr->p_filesz;
+		pmemsz += kernel_phdr->p_memsz;
+	}
+	u8 pfilesz_char[10];
+	u16 pfilesz_char_len = num_to_char(pfilesz, pfilesz_char, 10);
+	for (u8 *s = pfilesz_char, *st = s; s - st < pfilesz_char_len; s++)
+		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | *s);
+	
+	// 加载的长度(memsize)
+	global_line = 8;
+	line_index = 0;
+	for (char *s = "-- pmemsz: ", *st = s; *s; s++, line_index++)
+		write_to_terminal(s - st + global_line*80, DEFAULT_COLOR | *s);
+	u8 pmemsz_char[10];
+	u16 pmemsz_char_len = num_to_char(pmemsz, pmemsz_char, 10);
+	for (u8 *s = pmemsz_char, *st = s; s - st < pmemsz_char_len; s++)
+		write_to_terminal(s - st + global_line*80 + line_index, DEFAULT_COLOR | *s);
+
+	// 执行kernel程序
+	kernel_phdr = (void *)kernel_ehdr + kernel_ehdr->e_phoff; // 复原
 	for (u32 i = 0; i < kernel_ehdr->e_phnum; i++, kernel_phdr++)
 	{
 		if (kernel_phdr->p_type != PT_LOAD)

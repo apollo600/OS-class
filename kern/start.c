@@ -7,8 +7,18 @@
 u8 gdt_ptr[6]; /* 0~15:Limit  16~47:Base */
 DESCRIPTOR gdt[GDT_SIZE];
 
+inline static void 
+write_to_terminal(u16 disp_pos, u16 content)
+{
+	asm(
+	    "mov %1, %%gs:(%0)" ::"r"(disp_pos * 2), "r"(content)
+	    : "memory");
+}
+
 void cstart()
 {
+	for (char *s = "kernel", *st = s; *s; s++)
+		write_to_terminal(s - st + 80, GET_COLOR(GREEN, BLACK) | *s);
 	/* 将 LOADER 中的 GDT 复制到新的 GDT 中 */
 	memcpy(&gdt,					/* New GDT */
 	       (void *)(*((u32 *)(&gdt_ptr[2]))),	/* Base  of Old GDT */

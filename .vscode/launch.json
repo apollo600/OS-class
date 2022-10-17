@@ -1,0 +1,16 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "kernel-debug",//名字，随意定义
+			"type": "cppdbg", //debug的类型
+			"request": "launch",
+			"miDebuggerServerAddress": "127.0.0.1:1234",//远程调试的tcp地址
+			"program": "${workspaceFolder}/obj/kern/kernel.bin",//kernel.bin的存放位置
+			"stopAtEntry": false,//不用在开头就停止，由用户决定断点，相当于一进gdb就输入c
+			"MIMode": "gdb",//使用gdb作为调试工具
+			"miDebuggerPath": "/usr/bin/gdb",//gdb的位置
+            "cwd": "${workspaceFolder}",
+		}
+	]
+}

@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "Makefrag": "makefile",
+        "elf.h": "c",
+        "stdio.h": "c"
+    }
+}

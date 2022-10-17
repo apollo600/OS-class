@@ -67,6 +67,13 @@ _start:
 	jmp	SELECTOR_KERNEL_CS:csinit
 csinit:		; “这个跳转指令强制使用刚刚初始化的结构”——<<OS:D&I 2nd>> P90.
 
+	; 添加一些东西测试一下
+	push	0xB800
+	pop		gs
+	mov		ah, 0x0f
+	mov		al, 'K'
+	mov		word [gs:(80+0)*2], ax
+
 	push	0
 	popfd	; Pop top of stack into EFLAGS
 
