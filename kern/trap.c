@@ -9,6 +9,7 @@
  * 当前内核需要处理中断的数量
  */
 int k_reenter;
+extern size_t timecounter;
 
 void (*irq_table[16])(int) = {
 	clock_interrupt_handler,
@@ -101,7 +102,7 @@ exception_handler(int vec_no, int err_code, int eip, int cs, int eflags)
 void
 clock_interrupt_handler(int irq)
 {
-	kprintf("#");
+	kprintf("i%d", timecounter);
 	timecounter_inc();
 	p_proc_ready++;
 	if (p_proc_ready >= proc_table + PCB_SIZE) {

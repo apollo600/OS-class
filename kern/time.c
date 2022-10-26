@@ -1,7 +1,7 @@
 #include "type.h"
 #include "time.h"
 
-static size_t timecounter;
+size_t timecounter;
 
 /*
  * 时间戳加一
