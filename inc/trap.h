@@ -72,6 +72,7 @@ void	exception_handler(int vec_no, int err_code, int eip,
 /* 外设中断实际处理函数(C接口) */
 void	default_interrupt_handler(int irq);
 void	clock_interrupt_handler(int irq);
+void	keyboard_interrupt_handler(int irq);
 
 /* 外设中断实际处理函数表 */
 extern void (*irq_table[])(int);

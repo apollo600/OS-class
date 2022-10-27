@@ -20,3 +20,14 @@ clock()
 {
 	return timecounter;
 }
+
+/*
+ * 延迟固定时间
+ */
+void
+milli_delay(int milli_sec)
+{
+	int t = clock();
+
+	while (((clock() - t) * 1000 / HZ) < milli_sec) {}
+}

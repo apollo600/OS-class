@@ -30,6 +30,7 @@ typedef struct s_proc {
 	STACK_FRAME	regs;		/* process' registers saved in stack frame */
 	u32		pid;		/* process id passed in from MM */
 	char		p_name[16];	/* name of the process */
+	int		p_left_time;	/* time left to execute */
 }PROCESS;
 
 #define PCB_SIZE 3

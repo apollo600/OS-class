@@ -4,16 +4,18 @@
 #include "time.h"
 #include "trap.h"
 #include "x86.h"
+#include "keyboard.h"
 
 /*
  * 当前内核需要处理中断的数量
  */
 int k_reenter;
 extern size_t timecounter;
+extern int time_allocate[];
 
 void (*irq_table[16])(int) = {
 	clock_interrupt_handler,
-	default_interrupt_handler,
+	keyboard_interrupt_handler,
 	default_interrupt_handler,
 	default_interrupt_handler,
 	default_interrupt_handler,
@@ -102,10 +104,33 @@ exception_handler(int vec_no, int err_code, int eip, int cs, int eflags)
 void
 clock_interrupt_handler(int irq)
 {
-	kprintf("i%d", timecounter);
+	// kprintf("i%d", clock());
 	timecounter_inc();
-	p_proc_ready++;
+	// 进程调度
+	if (p_proc_ready->p_left_time > 0) {
+		p_proc_ready->p_left_time--;
+	} else {
+		p_proc_ready->p_left_time = time_allocate[p_proc_ready - proc_table];
+		p_proc_ready++;
+	}
 	if (p_proc_ready >= proc_table + PCB_SIZE) {
 		p_proc_ready = proc_table;
+	}
+}
+
+/*
+ * 键盘中断处理函数
+ */
+void
+keyboard_interrupt_handler(int irq)
+{
+	u8 scan_code = inb(0x60);
+	add_keyboard_buf(scan_code);
+	u8 ch = getch();
+	if (ch == 0xff) {
+		// 非可打印字符
+		return;
+	} else {
+		kprintf("%c", ch);
 	}
 }

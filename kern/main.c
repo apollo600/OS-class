@@ -6,6 +6,7 @@
 #include "type.h"
 #include "trap.h"
 #include "x86.h"
+#include "time.h"
 
 /*
  * 三个测试函数，用户进程的执行流
@@ -14,9 +15,8 @@ void TestA()
 {
 	int i = 0;
 	while(1){
-		kprintf("A%d.",i++);
-		for (int j = 0 ; j < 5e7 ; j++)
-			;//do nothing
+		// kprintf("\x1b[31mA%d.\x1b[0m",i++);
+		milli_delay(100); //do nothing
 	}
 }
 
@@ -24,9 +24,8 @@ void TestB()
 {
 	int i = 0;
 	while(1){
-		kprintf("B%d.",i++);
-		for (int j = 0 ; j < 5e7 ; j++)
-			;//do nothing
+		// kprintf("\x1b[31mB%d.\x1b[0m",i++);
+		milli_delay(100); //do nothing
 	}
 }
 
@@ -34,9 +33,8 @@ void TestC()
 {
 	int i = 0;
 	while(1){
-		kprintf("C%d.",i++);
-		for (int j = 0 ; j < 5e7 ; j++)
-			;//do nothing
+		// kprintf("\x1b[31mC%d.\x1b[0m",i++);
+		milli_delay(100); //do nothing
 	}
 }
 
@@ -54,11 +52,12 @@ void (*entry[]) = {
 	TestB,
 	TestC,
 };
-char pcb_name[][16] = {
+char pcb_name[PCB_SIZE][16] = {
 	"TestA",
 	"TestB",
 	"TestC",
 };
+int time_allocate[PCB_SIZE] = {2, 2, 1};
 
 /*
  * 内核的main函数
@@ -68,11 +67,17 @@ void kernel_main()
 {
 	kprintf("---start kernel main---\n");
 
+	// 设置8253 PIT
+	outb(TIMER_MODE, RATE_GENERATOR);
+	outb(TIMER0, (u8) (TIMER_FREQ/HZ) );
+	outb(TIMER0, (u8) ((TIMER_FREQ/HZ) >> 8) );
+	
 	PROCESS *p_proc = proc_table;
 	char *p_stack = process_stack;
 
 	for (int i = 0 ; i < PCB_SIZE ; i++, p_proc++) {
 		strcpy(p_proc->p_name, pcb_name[i]);
+		p_proc->p_left_time = time_allocate[i];
 		p_proc->regs.cs = (SELECTOR_FLAT_C & SA_RPL_MASK & SA_TI_MASK)
 			| SA_TIL | RPL_USER;
 		p_proc->regs.ds = (SELECTOR_FLAT_RW & SA_RPL_MASK & SA_TI_MASK)
@@ -95,6 +100,7 @@ void kernel_main()
 	p_proc_ready = proc_table;
 
 	enable_irq(CLOCK_IRQ);
+	enable_irq(KEYBOARD_IRQ);
 
 	restart();
 	assert(0);
