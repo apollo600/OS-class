@@ -1,6 +1,10 @@
 {
-    "files.associations": {
-        "Makefrag": "makefile",
-        "time.h": "c"
-    }
+	"editor.detectIndentation": false,
+	"editor.tabSize": 8,
+	"editor.insertSpaces": false,
+	"files.associations": {
+		"*.h": "c",
+		"*.c": "c",
+		"*.asm": "nasm"
+	}
 }
