@@ -25,8 +25,30 @@ static KB_INPUT kb_input = {
 void
 add_keyboard_buf(u8 ch)
 {
+	int make = 0;
+	u8 res;
+	
 	if (kb_input.count < KB_INBUF_SIZE) {
-		*(kb_input.p_head) = ch;
+		// 解析扫描码
+		if (ch == 0xE1) {
+			/* do nothing */
+			return;
+		} else if (ch == 0xE0) {
+			/* do nothing */
+			return;
+		} else {
+			/* 可打印字符 */
+			// 判断是make code还是break code
+			make = (ch & FLAG_BREAK ? 0 : 1);
+			// 如果是make code就加到缓冲区中
+			if (make) {
+				res = keymap[ch & 0x7F];
+			} else {
+				return;
+			}
+		}
+
+		*(kb_input.p_head) = res;
 		kb_input.p_head++;
 		// 如果缓冲区满丢弃其中内容
 		if (kb_input.p_head == kb_input.buf + KB_INBUF_SIZE) {
@@ -43,39 +65,18 @@ add_keyboard_buf(u8 ch)
 u8
 getch(void)
 {
-	u8 scan_code;
-	int make = 0;
-	u8 output;
+	u8 ch;
 
 	if (kb_input.count > 0) {
 		disable_int();
-		scan_code = *(kb_input.p_tail);
+		ch = *(kb_input.p_tail);
 		kb_input.p_tail++;
 		if (kb_input.p_tail == kb_input.buf + KB_INBUF_SIZE) {
 			kb_input.p_tail = kb_input.buf;
 		}
 		kb_input.count--;
 		enable_int();
-
-		// 解析扫描码
-		if (scan_code == 0xE1) {
-			/* do nothing */
-			return -1;
-		} else if (scan_code == 0xE0) {
-			/* do nothing */
-			return -1;
-		} else {
-			/* 可打印字符 */
-			// 判断是make code还是break code
-			make = (scan_code & FLAG_BREAK ? 0 : 1);
-			// 如果是make code就打印
-			if (make) {
-				output = keymap[scan_code & 0x7F];
-				return output;
-			} else {
-				return -1;
-			}
-		}
+		return ch;
 	} else {
 		return -1;
 	}
