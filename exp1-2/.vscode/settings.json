@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "Makefrag": "makefile",
+        "time.h": "c"
+    }
+}
