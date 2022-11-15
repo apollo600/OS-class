@@ -13,4 +13,6 @@ void _panic(const char*, int, const char*, ...) __attribute__((noreturn));
 // 静态assert，如果不符合条件就会直接在编译期报错
 #define static_assert(x)	switch (x) case 0: case (x):;
 
+#define DEBUG
+
 #endif /* MINIOS_ASSERT_H */

@@ -11,7 +11,7 @@
 void
 map_kern(phyaddr_t cr3)
 {
-	// 初始化pde（页目录表）
+	// 初始化PDE（页目录表）
 	// 由于cr3是物理地址，需要进行一步转化转化到线性地址才能访存
 	uintptr_t *pde_ptr = (uintptr_t *)K_PHY2LIN(cr3);
 	// 基地址在3GB处

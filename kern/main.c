@@ -3,6 +3,7 @@
 #include <string.h>
 #include <type.h>
 #include <x86.h>
+#include <elf.h>
 
 #include <kern/fs.h>
 #include <kern/kmalloc.h>
@@ -12,6 +13,9 @@
 #include <kern/protect.h>
 #include <kern/trap.h>
 
+#define MAX_VA 3 * GB
+#define KSTACK(p) (MAX_VA - ((p)+1)* 2*PGSIZE)
+
 // 标志着内核是否处理完成
 bool init_kernel;
 
@@ -19,6 +23,8 @@ bool init_kernel;
 PROCESS *p_proc_ready;
 // pcb表
 PROCESS	proc_table[PCB_SIZE];
+
+
 
 static inline void
 init_segment_regs(PROCESS *p_proc)
@@ -47,7 +53,13 @@ void kernel_main(void)
 
 	PROCESS *p_proc = proc_table;
 
+	static char filename[PCB_SIZE][12] = {
+		"TESTPID BIN",
+		"TESTKEY BIN",	
+	};
+
 	for (int i = 0 ; i < PCB_SIZE ; i++, p_proc++) {
+		kprintf("%s\n", filename[i]);
 		// 初始化进程段寄存器
 		init_segment_regs(p_proc);
 		// 为进程分配cr3物理内存
@@ -58,24 +70,62 @@ void kernel_main(void)
 		// 就可以直接lcr3，于此同时执行流不会触发page fault
 		// 如果不先map_kern，执行流会发现执行的代码的线性地址不存在爆出Page Fault
 		// 当然选不选择看个人的想法，评价是都行，各有各的优缺点
-		// lcr3(p_proc->pcb.cr3);
+		lcr3(p_proc->pcb.cr3);
 		
-		static char filename[PCB_SIZE][12] = {
-			"TESTPID BIN",
-			"TESTKEY BIN",	
-		};
 		// 从磁盘中将文件读出，需要注意的是要满足短目录项的文件名长度11，
 		// 前八个为文件名，后三个为后缀名，跟BootLoader做法一致
 		// 推荐将文件加载到3GB + 48MB处，应用程序保证不会有16MB那么大
 		read_file(filename[i], (void *)K_PHY2LIN(48 * MB));
 		// 现在你就需要将从磁盘中读出的ELF文件解析到用户进程的地址空间中
-		panic("unimplement! load elf file");
+		// panic("unimplement! load elf file");
+
+		u32 pcb_ptr = (u32)K_PHY2LIN(p_proc->pcb.cr3);
+		// pcb_ptr += PDX(3 * GB);
+		struct Elf* elf_header = (struct Elf *)K_PHY2LIN(48 * MB);
+		struct Proghdr *proc_header = (struct Proghdr *)((unsigned)elf_header + elf_header->e_phoff);
+
+		assert(elf_header->e_ehsize != 0);
+
+		// 找最大、最小地址
+		u32 max_end = 0, min_start = -1;
+		u32 this_start, this_end;
+		for (u32 i = 0; i < elf_header->e_phnum; i++, proc_header++) {
+			if (proc_header->p_va == 0) continue;
+			this_start = proc_header->p_va & 0xfffff000;
+			this_end = proc_header->p_va + proc_header->p_memsz;
+			this_end = (this_end & 0xfffff000) + (this_end % 0xfffff000 != 0) * 4 * KB;
+			// kprintf("%u: [%x %x]\n", i, this_start, this_end);
+
+			max_end = max_end > this_end ? max_end : this_end;
+			min_start = min_start < this_start ? min_start : this_start;
+			pcb_ptr += proc_header->p_memsz;
+		}
+
+		// 分配空间
+		u32 size = max_end - min_start;
+		user_alloc_pte(p_proc->pcb.cr3, min_start, size);
 		
+		// 拷贝elf
+		proc_header = (struct Proghdr *)((unsigned)elf_header + elf_header->e_phoff);
+		for (u32 i = 0; i < elf_header->e_phnum; i++, proc_header++) {
+			if (proc_header->p_va == 0) continue;
+			// kprintf("%u: %x ==> %x\n", i, (unsigned)elf_header + proc_header->p_offset, proc_header->p_va);
+			memcpy(
+				(void *)proc_header->p_va, 
+				(void *)((u32)elf_header + proc_header->p_offset),
+				proc_header->p_filesz
+			);
+		}
 		// 上一个实验中，我们开栈是用内核中的一个数组临时充当栈
 		// 但是现在就不行了，用户是无法访问内核的地址空间（3GB ~ 3GB + 128MB）
 		// 需要你自行处理给用户分配用户栈。
-		panic("unimplement! init user stack and esp");
-		// 初始化用户寄存器
+		// panic("unimplement! init user stack and esp");
+		u32 stack_top = 3 * GB - 2 * MB;
+		user_alloc_pte(p_proc->pcb.cr3, stack_top - MB, MB);
+		p_proc->pcb.user_regs.esp = stack_top;
+		// eip执行入口
+		p_proc->pcb.user_regs.eip = elf_header->e_entry;
+		// eflags
 		p_proc->pcb.user_regs.eflags = 0x1202; /* IF=1, IOPL=1 */
 		
 		// 接下来初始化内核寄存器，
