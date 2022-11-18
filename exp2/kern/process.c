@@ -63,8 +63,7 @@ schedule(void)
 	}
 	if (p_next_proc == p_cur_proc) {
 		// 没有可用进程
-		// panic("scheduler error");
-		// 继续该可用进程不就行了
+		// 继续该可用进程
 	}
 	
 

@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        ".bochsrc": "yaml",
+        "syscall.h": "c"
+    }
+}

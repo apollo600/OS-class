@@ -84,7 +84,6 @@ void kernel_main(void)
 		// panic("unimplement! load elf file");
 
 		u32 pcb_ptr = (u32)K_PHY2LIN(p_proc->pcb.cr3);
-		// pcb_ptr += PDX(3 * GB);
 		struct Elf* elf_header = (struct Elf *)K_PHY2LIN(48 * MB);
 		struct Proghdr *proc_header = (struct Proghdr *)((unsigned)elf_header + elf_header->e_phoff);
 

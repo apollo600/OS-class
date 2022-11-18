@@ -38,8 +38,5 @@ do_delay_ticks(int pid, u32 ticks, u32 start_tick)
 	PROCESS* p_proc =  proc_table + pid;
 	p_proc->pcb.delay_tick = start_tick + ticks;
 	schedule();
-	// p_proc->pcb.priority--;
-	// if (p_proc->pcb.priority < 0)
-	// 	p_proc->pcb.priority = 0;
 	return 0;
 }
