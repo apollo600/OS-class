@@ -1,6 +1,11 @@
 {
     "files.associations": {
         ".bochsrc": "yaml",
-        "syscall.h": "c"
+        "*.asm": "asm-intel-x86-generic",
+        "syscall.h": "c",
+        "fork.h": "c",
+        "terminal.h": "c",
+        "x86.h": "c",
+        "kmalloc.h": "c"
     }
 }
