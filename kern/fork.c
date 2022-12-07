@@ -1,4 +1,6 @@
 #include <assert.h>
+#include <x86.h>
+#include <string.h>
 
 #include <kern/fork.h>
 #include <kern/syscall.h>
@@ -6,6 +8,7 @@
 #include <kern/stdio.h>
 #include <kern/kmalloc.h>
 #include <kern/pmap.h>
+#include <kern/sche.h>
 
 extern PROCESS *p_proc_ready;
 
@@ -27,7 +30,8 @@ kern_fork(PROCESS_0 *p_fa)
 	if (proc_fork == NULL) {
 		kprintf("NO EMPTY PROCESS\n");
 	} else {
-		kprintf("%x %x\n", proc_table, proc_fork);
+		// kprintf("%x %x\n", proc_table, proc_fork);
+		memset(proc_fork, 0, sizeof(PROCESS)); // 清空（因为后面是memcpy，所以其实没必要，以防万一）
 	}
 
 	// 再之后你需要做的是好好阅读一下pcb的数据结构，搞明白结构体中每个成员的语义
@@ -46,32 +50,38 @@ kern_fork(PROCESS_0 *p_fa)
 	// （你肯定会觉得这个问题问的莫名其妙的，只能说你如果遇到那一块问题了就会体会到这个问题的重要性，
 	// 这需要你对调度整个过程都掌握比较清楚）
 	// panic("Unimplement! copy pcb?");
+	while (xchg(&p_fa->lock, 1) == 1) // 打开父进程的一把大锁
+		schedule();
+	memcpy(proc_fork, p_fa, KERN_STACKSIZE); // 先将pcb和内核栈全拷贝过去，然后再进行修改
 	PROCESS_0* p_son = &proc_fork->pcb;
-	// 直接拷贝的部分
-	p_son->kern_regs = p_fa->kern_regs;
-	p_son->user_regs = p_fa->user_regs;
-	// 自行初始化的部分
-	p_son->lock = 0;
-	p_son->statu = READY;
-	p_son->priority = p_son->ticks = 1;
-	// 分配页表
+	p_son->statu = INITING;
+	/* 分配页表 */
 	p_son->cr3 = phy_malloc_4k(); // 页目录的地址
-	// map_kern(p_son->cr3, &p_son->page_list); // 映射3GB~3GB+128MB空间，执行这一行后会报错
-	// 看一下主进程的页表分配
+	// page_table_copy(p_fa, p_son);
+	// panic("here");
+	/* 看一下进程的页表分配 */
+	kprintf("parent: ");
 	struct page_node* p = p_fa->page_list;
-	while (1) {
-		kprintf("%x, ", p->paddr);
-		if (p->nxt == NULL) 
-			break;
-		else 
-			p = p->nxt;
-	}
+	while (p != NULL) {
+		kprintf("%x, ", p->laddr);
+		p = p->nxt;
+	} 
+	kprintf("\nson: ");
+	p = p_son->page_list;
+	do {
+		kprintf("%x, ", p->laddr);
+		p = p->nxt;
+	} while (p != NULL);
 
 	// 别忘了维护进程树，将这对父子进程关系添加进去
 	panic("Unimplement! maintain process tree");
 
+	xchg(&p_fa->lock, 0); // 关掉父进程的一把大锁
+
 	// 最后你需要将子进程的状态置为READY，说明fork已经好了，子进程准备就绪了
 	panic("Unimplement! change status to READY");
+	p_son->statu = READY;
+	p_son->priority = p_son->ticks = 1;
 
 	// 在你写完fork代码时先别急着运行跑，先要对自己来个灵魂拷问
 	// 1. 上锁上了吗？所有临界情况都考虑到了吗？（永远要相信有各种奇奇怪怪的并发问题）

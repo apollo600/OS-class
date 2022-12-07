@@ -2,9 +2,11 @@
 #include <elf.h>
 #include <string.h>
 #include <mmu.h>
+#include <x86.h>
 
 #include <kern/kmalloc.h>
 #include <kern/pmap.h>
+#include <kern/stdio.h>
 
 /*
  * 申请一个新的物理页，并更新page_list页面信息
@@ -55,7 +57,6 @@ lin_mapping_phy(u32			cr3,
 		if ((pte_ptr[PTX(laddr)] & PTE_P) != 0)
 			return;
 		page_phy = alloc_phy_page(page_list);
-		(*page_list)->laddr = laddr;
 		
 	} else {
 		if ((pte_ptr[PTX(laddr)] & PTE_P) != 0)
@@ -63,6 +64,7 @@ lin_mapping_phy(u32			cr3,
 		assert(PGOFF(paddr) == 0);
 		page_phy = paddr;
 	}
+	(*page_list)->laddr = laddr;
 	pte_ptr[PTX(laddr)] = page_phy | pte_flag;
 }
 
@@ -152,3 +154,74 @@ recycle_pages(struct page_node *page_list)
 		kfree(prevp);
 	}
 }
+
+/**
+ * 用于在拷贝进程时拷贝页表
+ * 首先将页表全部拷贝过去
+ * 然后跳过3GB~3GB+128MB部分
+ * 对于3GB以下部分，先重新分配一个物理地址
+ * 再将内容拷贝过去
+ */
+void
+page_table_copy(PROCESS_0* src_pcb, PROCESS_0* dst_pcb) {
+	// 因为外层开了一把大锁，所以就不用每个函数都自己加锁了
+	phyaddr_t src_cr3 = src_pcb->cr3;
+	phyaddr_t dst_cr3 = dst_pcb->cr3;
+	kprintf("pcb: %x %x\n", src_pcb, dst_pcb);
+	kprintf("cr3: %x %x\n", src_cr3, dst_cr3);
+	uintptr_t *pde_ptr = (uintptr_t *)K_PHY2LIN(src_cr3);
+	uintptr_t *buf_page = (uintptr_t *)kmalloc(PGSIZE);
+	// 以下遍历每一个存在的页表项拷贝其内容
+	u32 pde_index = 0;
+	while (pde_index < NPDENTRIES) {
+		// 如果该页目录项不存在，则跳过
+		if ((pde_ptr[pde_index] & PTE_P) == 0) continue;
+		// 拷贝页目录项
+		kprintf("PDE=%x: ", (uintptr_t)&pde_ptr[pde_index]);
+		lin_mapping_phy(
+			dst_cr3,
+			&dst_pcb->page_list,
+			(uintptr_t)&pde_ptr[pde_index],
+			(phyaddr_t)-1, // 页目录项的物理地址都是要重新分配的
+			PTE_P | PTE_W
+		);
+		u32 pte_index = 0;
+		uintptr_t *pte_ptr = (uintptr_t *)K_PHY2LIN(pde_ptr[pde_index]);
+		kprintf("PTE=%x, ", pte_ptr);
+		while (pte_index < NPTENTRIES) {
+			// 如果该页表项不存在，则跳过
+			// debug: 这一句出现了页错误
+			if ((pte_ptr[pte_index] & PTE_P) == 0) {
+				kprintf("pass");
+				continue;
+			}
+			// 如果是内核态的物理地址，则不需要重新分配，共享这块物理内存
+			phyaddr_t new_paddr = -1;
+			if ((uintptr_t)&pte_ptr[pte_index] >= 3 * GB) {
+				new_paddr = pte_ptr[pte_index];
+			}
+			// 拷贝页表项
+			kprintf("%x: %x=>%x, ", (uintptr_t)&pte_ptr[pte_index], pte_ptr[pte_index], new_paddr);
+			lin_mapping_phy(
+				dst_cr3,
+				&dst_pcb->page_list,
+				(uintptr_t)&pte_ptr[pte_index],
+				new_paddr,
+				PTE_P | PTE_W
+			);
+			// 如果是用户态的物理地址，拷贝内容
+			uintptr_t *laddr = pte_ptr + pte_index;
+			if ((uintptr_t)laddr < 3 * GB) {
+				memcpy(laddr, buf_page, PGSIZE);
+				lcr3(dst_cr3);
+				memcpy(buf_page, laddr, PGSIZE);
+				lcr3(src_cr3);
+			}
+			pte_index++;
+		}
+		kprintf("\n");
+		pde_index++;
+	}
+	kfree(buf_page);
+}
+

@@ -56,7 +56,7 @@ get_empty_process(void) {
 		// kprintf("%d | ", proc_current->pcb.ticks);
 		while (xchg(&proc_current->pcb.lock, 1) == 1)
 			schedule();
-		if (proc_current->pcb.ticks == 0) {
+		if (proc_current->pcb.statu == IDLE) {
 			return proc_current;
 		}
 		xchg(&proc_current->pcb.lock, 0);

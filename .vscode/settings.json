@@ -6,6 +6,14 @@
         "fork.h": "c",
         "terminal.h": "c",
         "x86.h": "c",
-        "kmalloc.h": "c"
+        "kmalloc.h": "c",
+        "trap.h": "c",
+        "process.h": "c",
+        "time.h": "c",
+        "elf.h": "c",
+        "string.h": "c",
+        "pmap.h": "c",
+        "type.h": "c",
+        "stdio.h": "c"
     }
 }
