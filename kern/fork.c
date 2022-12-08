@@ -9,6 +9,7 @@
 #include <kern/kmalloc.h>
 #include <kern/pmap.h>
 #include <kern/sche.h>
+#include <kern/trap.h>
 
 extern PROCESS *p_proc_ready;
 
@@ -29,9 +30,9 @@ kern_fork(PROCESS_0 *p_fa)
 	PROCESS* proc_fork = get_empty_process();
 	if (proc_fork == NULL) {
 		kprintf("NO EMPTY PROCESS\n");
+		return -1;
 	} else {
-		// kprintf("%x %x\n", proc_table, proc_fork);
-		memset(proc_fork, 0, sizeof(PROCESS)); // 清空（因为后面是memcpy，所以其实没必要，以防万一）
+		memset(proc_fork, 0, sizeof(PROCESS)); // 清空
 	}
 
 	// 再之后你需要做的是好好阅读一下pcb的数据结构，搞明白结构体中每个成员的语义
@@ -52,44 +53,61 @@ kern_fork(PROCESS_0 *p_fa)
 	// panic("Unimplement! copy pcb?");
 	while (xchg(&p_fa->lock, 1) == 1) // 打开父进程的一把大锁
 		schedule();
-	memcpy(proc_fork, p_fa, KERN_STACKSIZE); // 先将pcb和内核栈全拷贝过去，然后再进行修改
+	disable_int();
+		memcpy(proc_fork, p_fa, KERN_STACKSIZE); // 先将pcb和内核栈全拷贝过去，然后再进行修改
+	enable_int();
 	PROCESS_0* p_son = &proc_fork->pcb;
 	p_son->statu = INITING;
 	/* 分配页表 */
-	p_son->cr3 = phy_malloc_4k(); // 页目录的地址
-	// page_table_copy(p_fa, p_son);
-	// panic("here");
-	/* 看一下进程的页表分配 */
-	kprintf("parent: ");
-	struct page_node* p = p_fa->page_list;
-	while (p != NULL) {
-		kprintf("%x, ", p->laddr);
-		p = p->nxt;
-	} 
-	kprintf("\nson: ");
-	p = p_son->page_list;
-	do {
-		kprintf("%x, ", p->laddr);
-		p = p->nxt;
-	} while (p != NULL);
+	page_table_copy(p_fa, p_son);
+	/* 其他需要初始化的内容 */
+	p_son->lock = 0;
+	p_son->pid = alloc_pid();
+	p_son->priority = p_son->ticks = 1;
+	p_son->user_regs.eax = 0;
 
 	// 别忘了维护进程树，将这对父子进程关系添加进去
-	panic("Unimplement! maintain process tree");
-
-	xchg(&p_fa->lock, 0); // 关掉父进程的一把大锁
+	// panic("Unimplement! maintain process tree");
+	/* 父子节点 */
+	p_son->fork_tree.p_fa = p_fa;
+	/* 兄弟节点 */
+	if (p_fa->fork_tree.sons == NULL) {
+		// 如果之前没有子节点
+		struct son_node *new_son_node = (struct son_node *)kmalloc(sizeof(struct son_node));
+		new_son_node->nxt = NULL;
+		new_son_node->pre = NULL;
+		new_son_node->p_son = p_son;
+		p_fa->fork_tree.sons = new_son_node;
+	} else {
+		// 如果已经有子节点
+		struct son_node *new_son_node = (struct son_node *)kmalloc(sizeof(struct son_node));
+		new_son_node->p_son = p_son;
+		new_son_node->pre = p_fa->fork_tree.sons->pre; // 头插法
+		new_son_node->nxt = p_fa->fork_tree.sons; 
+		p_fa->fork_tree.sons->pre = new_son_node;
+	}
 
 	// 最后你需要将子进程的状态置为READY，说明fork已经好了，子进程准备就绪了
-	panic("Unimplement! change status to READY");
-	p_son->statu = READY;
-	p_son->priority = p_son->ticks = 1;
+	// panic("Unimplement! change status to READY");
+	disable_int();
+		xchg(&p_son->lock, 0); // 关掉子进程的一把大锁
+		xchg(&p_fa->lock, 0); // 关掉父进程的一把大锁
+		p_son->statu = READY;
+		// kern regs
+		p_son->kern_regs.esp = (u32)(proc_fork + 1) - 8;
+		// 保证切换内核栈后执行流进入的是restart函数。
+		*(u32 *)(p_son->kern_regs.esp + 0) = (u32)restart;
+		// 这里是因为restart要用`pop esp`确认esp该往哪里跳。
+		*(u32 *)(p_son->kern_regs.esp + 4) = (u32)p_son;
+	enable_int();
 
 	// 在你写完fork代码时先别急着运行跑，先要对自己来个灵魂拷问
 	// 1. 上锁上了吗？所有临界情况都考虑到了吗？（永远要相信有各种奇奇怪怪的并发问题）
 	// 2. 所有错误情况都判断到了吗？错误情况怎么处理？（RTFM->`man 2 fork`）
 	// 3. 你写的代码真的符合fork语义吗？
-	panic("Unimplement! soul torture");
+	// panic("Unimplement! soul torture");
 
-	return 0;
+	return p_son->pid;
 }
 
 ssize_t

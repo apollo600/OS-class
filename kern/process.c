@@ -1,4 +1,5 @@
 #include <x86.h>
+#include <assert.h>
 
 #include <kern/process.h>
 #include <kern/sche.h>
@@ -66,4 +67,34 @@ get_empty_process(void) {
 		}
 	}
 	return NULL;
+}
+
+void
+init_pid(void) {
+	u32 i;
+	for (i = 0; i < PID_COUNT - 1; i++) {
+		pid_map[i] = i + 1;
+	}
+	pid_map[i] = 0;
+}
+
+u32
+alloc_pid(void) {
+	u32 new_pid = pid_map[0]; // 取可用pid
+	assert(new_pid < PID_COUNT); // 防止越界
+	pid_map[0] = pid_map[new_pid]; // 更新下一个可用的pid
+	return new_pid;
+}
+
+void
+free_pid(u32 old_pid) {
+	u32 i;
+	u32 tmp = pid_map[0];
+	// 跳过PID_DELAY-1个pid
+	for (i = 0; i < PID_DELAY - 1; i++) {
+		tmp = pid_map[tmp];
+	}
+	// 插入到tmp之后
+	pid_map[tmp] = old_pid;
+	pid_map[old_pid] = tmp;
 }

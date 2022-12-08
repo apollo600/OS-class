@@ -5,6 +5,7 @@
 #include <kern/protect.h>
 #include <kern/stdio.h>
 #include <kern/trap.h>
+#include <kern/process.h>
 
 struct Pseudodesc gdt_ptr, idt_ptr;
 
@@ -233,5 +234,7 @@ void cstart(void)
 	init_idt();
 	kprintf("irq");
 	init_irq();
+	kprintf("pid");
+	init_pid();
 	kprintf("---\n");
 }

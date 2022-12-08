@@ -7,6 +7,7 @@
 #include <kern/kmalloc.h>
 #include <kern/pmap.h>
 #include <kern/stdio.h>
+#include <kern/trap.h>
 
 /*
  * 申请一个新的物理页，并更新page_list页面信息
@@ -57,14 +58,18 @@ lin_mapping_phy(u32			cr3,
 		if ((pte_ptr[PTX(laddr)] & PTE_P) != 0)
 			return;
 		page_phy = alloc_phy_page(page_list);
-		
+		(*page_list)->laddr = laddr;
 	} else {
 		if ((pte_ptr[PTX(laddr)] & PTE_P) != 0)
 			warn("this page was mapped before, laddr: %x", laddr);
 		assert(PGOFF(paddr) == 0);
 		page_phy = paddr;
+		struct page_node *new_node = kmalloc(sizeof(struct page_node));
+		new_node->nxt = *page_list;
+		new_node->paddr = paddr;
+		new_node->laddr = laddr;
+		*page_list = new_node;
 	}
-	(*page_list)->laddr = laddr;
 	pte_ptr[PTX(laddr)] = page_phy | pte_flag;
 }
 
@@ -157,71 +162,80 @@ recycle_pages(struct page_node *page_list)
 
 /**
  * 用于在拷贝进程时拷贝页表
- * 首先将页表全部拷贝过去
- * 然后跳过3GB~3GB+128MB部分
- * 对于3GB以下部分，先重新分配一个物理地址
- * 再将内容拷贝过去
+ * 通过遍历page_list链表的方式实现
+ * 对于3GB~3GB+128MB部分，直接拷贝对应的物理地址
+ * 对于3GB以下部分，先重新分配一个物理地址，再将内容拷贝过去
  */
 void
 page_table_copy(PROCESS_0* src_pcb, PROCESS_0* dst_pcb) {
 	// 因为外层开了一把大锁，所以就不用每个函数都自己加锁了
+	/* 页表创建 */
+	phyaddr_t new_cr3 = phy_malloc_4k();
+	memset((void *)K_PHY2LIN(new_cr3), 0, PGSIZE);
+	struct page_node *new_page_list = kmalloc(sizeof(struct page_node));
+	new_page_list->nxt = NULL;
+	new_page_list->paddr = new_cr3;
+	new_page_list->laddr = -1;
+	map_kern(new_cr3, &new_page_list);
+
 	phyaddr_t src_cr3 = src_pcb->cr3;
-	phyaddr_t dst_cr3 = dst_pcb->cr3;
+	phyaddr_t dst_cr3 = new_cr3;
+	disable_int();
+		struct page_node *src_page_list = src_pcb->page_list;
+	enable_int();
+	struct page_node *dst_page_list = new_page_list;
 	kprintf("pcb: %x %x\n", src_pcb, dst_pcb);
 	kprintf("cr3: %x %x\n", src_cr3, dst_cr3);
-	uintptr_t *pde_ptr = (uintptr_t *)K_PHY2LIN(src_cr3);
+	kprintf("page_list: %x %x\n", src_page_list, dst_page_list);
 	uintptr_t *buf_page = (uintptr_t *)kmalloc(PGSIZE);
+	struct page_node *p = src_page_list;
 	// 以下遍历每一个存在的页表项拷贝其内容
-	u32 pde_index = 0;
-	while (pde_index < NPDENTRIES) {
-		// 如果该页目录项不存在，则跳过
-		if ((pde_ptr[pde_index] & PTE_P) == 0) continue;
-		// 拷贝页目录项
-		kprintf("PDE=%x: ", (uintptr_t)&pde_ptr[pde_index]);
-		lin_mapping_phy(
-			dst_cr3,
-			&dst_pcb->page_list,
-			(uintptr_t)&pde_ptr[pde_index],
-			(phyaddr_t)-1, // 页目录项的物理地址都是要重新分配的
-			PTE_P | PTE_W
-		);
-		u32 pte_index = 0;
-		uintptr_t *pte_ptr = (uintptr_t *)K_PHY2LIN(pde_ptr[pde_index]);
-		kprintf("PTE=%x, ", pte_ptr);
-		while (pte_index < NPTENTRIES) {
-			// 如果该页表项不存在，则跳过
-			// debug: 这一句出现了页错误
-			if ((pte_ptr[pte_index] & PTE_P) == 0) {
-				kprintf("pass");
-				continue;
-			}
-			// 如果是内核态的物理地址，则不需要重新分配，共享这块物理内存
-			phyaddr_t new_paddr = -1;
-			if ((uintptr_t)&pte_ptr[pte_index] >= 3 * GB) {
-				new_paddr = pte_ptr[pte_index];
-			}
-			// 拷贝页表项
-			kprintf("%x: %x=>%x, ", (uintptr_t)&pte_ptr[pte_index], pte_ptr[pte_index], new_paddr);
+	kprintf("pmap> ");
+	while (p != NULL) {
+		// 如果是-1，可以直接跳过
+		if (p->laddr == -1) {
+			p = p->nxt;
+			continue;
+		}
+		// 如果是3GB~3GB+128MB，已经使用map_kern分配过了
+		if (p->laddr >= 3 * GB) {
+			p = p->nxt;
+			continue;
+		}
+		// 如果是小于3GB，先分配物理地址，然后拷贝数据内容
+		else {
 			lin_mapping_phy(
 				dst_cr3,
-				&dst_pcb->page_list,
-				(uintptr_t)&pte_ptr[pte_index],
-				new_paddr,
-				PTE_P | PTE_W
+				&dst_page_list,
+				p->laddr,
+				(phyaddr_t)-1,
+				PTE_P | PTE_W | PTE_U
 			);
-			// 如果是用户态的物理地址，拷贝内容
-			uintptr_t *laddr = pte_ptr + pte_index;
-			if ((uintptr_t)laddr < 3 * GB) {
-				memcpy(laddr, buf_page, PGSIZE);
+			kprintf("%x: %x=>%x, ", p->laddr, p->paddr, dst_page_list->paddr);
+			// 使用内核物理地址的拷贝方式
+			// memcpy((uintptr_t *)K_PHY2LIN(dst_page_list->paddr), (uintptr_t *)K_PHY2LIN(p->paddr), PGSIZE);
+			// 使用lcr3的方式（正统方式）
+			memcpy(buf_page, (uintptr_t *)p->laddr, PGSIZE);
+			disable_int();
 				lcr3(dst_cr3);
-				memcpy(buf_page, laddr, PGSIZE);
+				memcpy((uintptr_t *)p->laddr, buf_page, PGSIZE);
 				lcr3(src_cr3);
-			}
-			pte_index++;
+			enable_int();
 		}
-		kprintf("\n");
-		pde_index++;
+		p = p->nxt;
 	}
-	kfree(buf_page);
+	disable_int();
+		dst_pcb->cr3 = dst_cr3;
+		dst_pcb->page_list = dst_page_list;
+	enable_int();
+	kprintf("\ncheck_son: ");
+	u32 count = 0;
+	p = dst_pcb->page_list;
+	while (p != NULL) {
+		if (p->laddr != -1 && p->laddr < 3 * GB)
+			count++;
+		p = p->nxt;
+	} 
+	kprintf("%d ", count);
 }
 

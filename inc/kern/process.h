@@ -96,6 +96,12 @@ extern PROCESS *p_proc_ready;
 #define PCB_SIZE	20
 // kern/main.c
 extern PROCESS	proc_table[];
+// pid的数量
+#define PID_COUNT 	32768
+// pid表
+u32 pid_map[PID_COUNT];
+// 回收pid时的延时数量
+#define PID_DELAY	5
 
 // 内核栈切换上下文函数(汇编接口)
 void	switch_kern_context(
@@ -108,5 +114,14 @@ u32	kern_get_pid(PROCESS_0 *p_proc);
 
 // 找到空闲进程
 PROCESS* get_empty_process(void);
+
+// 初始化pid表
+void init_pid(void);
+
+// 分配pid
+u32 alloc_pid(void);
+
+// 回收pid
+void free_pid(u32 old_pid);
 
 #endif /* MINIOS_KERN_PROCESS_H */
