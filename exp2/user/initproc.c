@@ -15,6 +15,7 @@ int main()
 	if (pid < 0)
 		panic("init process fork failed errno: %d", pid);
 
+	// panic("here");
 	int wstatus;
 	while (1) {
 		pid = wait(&wstatus);

@@ -97,11 +97,11 @@ extern PROCESS *p_proc_ready;
 // kern/main.c
 extern PROCESS	proc_table[];
 // pid的数量
-#define PID_COUNT 	32768
+#define PID_COUNT 	20
 // pid表
 u32 pid_map[PID_COUNT];
 // 回收pid时的延时数量
-#define PID_DELAY	5
+#define PID_DELAY	1
 
 // 内核栈切换上下文函数(汇编接口)
 void	switch_kern_context(

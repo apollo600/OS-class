@@ -180,9 +180,9 @@ page_table_copy(PROCESS_0* src_pcb, PROCESS_0* dst_pcb) {
 
 	phyaddr_t src_cr3 = src_pcb->cr3;
 	phyaddr_t dst_cr3 = new_cr3;
-	disable_int();
+	DISABLE_INT();
 		struct page_node *src_page_list = src_pcb->page_list;
-	enable_int();
+	ENABLE_INT();
 	struct page_node *dst_page_list = new_page_list;
 	kprintf("pcb: %x %x\n", src_pcb, dst_pcb);
 	kprintf("cr3: %x %x\n", src_cr3, dst_cr3);
@@ -216,18 +216,18 @@ page_table_copy(PROCESS_0* src_pcb, PROCESS_0* dst_pcb) {
 			// memcpy((uintptr_t *)K_PHY2LIN(dst_page_list->paddr), (uintptr_t *)K_PHY2LIN(p->paddr), PGSIZE);
 			// 使用lcr3的方式（正统方式）
 			memcpy(buf_page, (uintptr_t *)p->laddr, PGSIZE);
-			disable_int();
+			DISABLE_INT();
 				lcr3(dst_cr3);
 				memcpy((uintptr_t *)p->laddr, buf_page, PGSIZE);
 				lcr3(src_cr3);
-			enable_int();
+			ENABLE_INT();
 		}
 		p = p->nxt;
 	}
-	disable_int();
+	DISABLE_INT();
 		dst_pcb->cr3 = dst_cr3;
 		dst_pcb->page_list = dst_page_list;
-	enable_int();
+	ENABLE_INT();
 	kprintf("\n");
 }
 

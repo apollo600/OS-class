@@ -53,9 +53,9 @@ kern_fork(PROCESS_0 *p_fa)
 	// panic("Unimplement! copy pcb?");
 	while (xchg(&p_fa->lock, 1) == 1) // 打开父进程的一把大锁
 		schedule();
-	disable_int();
+	DISABLE_INT();
 		memcpy(proc_fork, p_fa, KERN_STACKSIZE); // 先将pcb和内核栈全拷贝过去，然后再进行修改
-	enable_int();
+	ENABLE_INT();
 	PROCESS_0* p_son = &proc_fork->pcb;
 	p_son->statu = INITING;
 	/* 分配页表 */
@@ -89,7 +89,7 @@ kern_fork(PROCESS_0 *p_fa)
 
 	// 最后你需要将子进程的状态置为READY，说明fork已经好了，子进程准备就绪了
 	// panic("Unimplement! change status to READY");
-	disable_int();
+	DISABLE_INT();
 		xchg(&p_son->lock, 0); // 关掉子进程的一把大锁
 		xchg(&p_fa->lock, 0); // 关掉父进程的一把大锁
 		p_son->statu = READY;
@@ -99,7 +99,7 @@ kern_fork(PROCESS_0 *p_fa)
 		*(u32 *)(p_son->kern_regs.esp + 0) = (u32)restart;
 		// 这里是因为restart要用`pop esp`确认esp该往哪里跳。
 		*(u32 *)(p_son->kern_regs.esp + 4) = (u32)p_son;
-	enable_int();
+	ENABLE_INT();
 
 	// 在你写完fork代码时先别急着运行跑，先要对自己来个灵魂拷问
 	// 1. 上锁上了吗？所有临界情况都考虑到了吗？（永远要相信有各种奇奇怪怪的并发问题）

@@ -75,12 +75,15 @@ init_pid(void) {
 	for (i = 0; i < PID_COUNT - 1; i++) {
 		pid_map[i] = i + 1;
 	}
-	pid_map[i] = 0;
+	pid_map[PID_COUNT - 1] = 1;
 }
 
 u32
 alloc_pid(void) {
 	u32 new_pid = pid_map[0]; // 取可用pid
+	if (new_pid == 0) {
+		panic("pid run out");
+	}
 	assert(new_pid < PID_COUNT); // 防止越界
 	pid_map[0] = pid_map[new_pid]; // 更新下一个可用的pid
 	return new_pid;
@@ -89,12 +92,26 @@ alloc_pid(void) {
 void
 free_pid(u32 old_pid) {
 	u32 i;
-	u32 tmp = pid_map[0];
+	u32 old_index = 0;
+	u32 new_index = pid_map[0];
+	assert(old_pid > 0 && old_pid <= PID_COUNT);
+	// 遍历map找到该pid的位置
+	for (i = 1; i < PID_COUNT; i++) {
+		if (pid_map[i] == old_pid) {
+			old_index = i;
+			break;
+		}
+	}
 	// 跳过PID_DELAY-1个pid
 	for (i = 0; i < PID_DELAY - 1; i++) {
-		tmp = pid_map[tmp];
+		assert(new_index < PID_COUNT);
+		new_index = pid_map[new_index];
 	}
 	// 插入到tmp之后
-	pid_map[tmp] = old_pid;
-	pid_map[old_pid] = tmp;
+	assert(new_index < PID_COUNT);
+	assert(old_index < PID_COUNT);
+	u32 tmp = pid_map[new_index];
+	pid_map[new_index] = old_index; // 这样原来的旧pid会继续被分配出去
+	pid_map[old_index] = tmp;
+	pid_map[PID_COUNT - 1] = old_pid; // 维护pid总数不变
 }

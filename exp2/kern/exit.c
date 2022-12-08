@@ -7,6 +7,8 @@
 #include <kern/sche.h>
 #include <kern/syscall.h>
 #include <kern/trap.h>
+#include <kern/stdio.h>
+#include <user/wait.h>
 
 static void
 awake_father_and_become_zombie(PROCESS_0 *p_proc)
@@ -68,7 +70,7 @@ transfer_orphans(PROCESS_0 *p_proc)
 		p->nxt = p_init->fork_tree.sons;
 		if (p->nxt != NULL)
 			p->nxt->pre = p;
-		p_init->fork_tree.sons = p; 
+		p_init->fork_tree.sons = p->nxt; 
 		// 最后释放子进程的锁
 		xchg(&p_son->lock, 0);
 		p = p_nxt;
@@ -93,6 +95,7 @@ kern_exit(PROCESS_0 *p_proc, int exit_code)
 	// 上锁修改exit code
 	while (xchg(&p_proc->lock, 1) == 1)
 		schedule();
+	// kprintf("exit_code: %d ", WEXITSTATUS(exit_code));
 	p_proc->exit_code = exit_code;
 	xchg(&p_proc->lock, 0);
 

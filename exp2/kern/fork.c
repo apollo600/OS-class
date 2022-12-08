@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <x86.h>
 #include <string.h>
+#include <errno.h>
 
 #include <kern/fork.h>
 #include <kern/syscall.h>
@@ -29,8 +30,7 @@ kern_fork(PROCESS_0 *p_fa)
 	// panic("Unimplement! find a idle process");
 	PROCESS* proc_fork = get_empty_process();
 	if (proc_fork == NULL) {
-		kprintf("NO EMPTY PROCESS\n");
-		return -1;
+		return -EAGAIN;
 	} else {
 		memset(proc_fork, 0, sizeof(PROCESS)); // 清空
 	}
@@ -51,23 +51,27 @@ kern_fork(PROCESS_0 *p_fa)
 	// （你肯定会觉得这个问题问的莫名其妙的，只能说你如果遇到那一块问题了就会体会到这个问题的重要性，
 	// 这需要你对调度整个过程都掌握比较清楚）
 	// panic("Unimplement! copy pcb?");
-	while (xchg(&p_fa->lock, 1) == 1) // 打开父进程的一把大锁
-		schedule();
-	disable_int();
-		memcpy(proc_fork, p_fa, KERN_STACKSIZE); // 先将pcb和内核栈全拷贝过去，然后再进行修改
-	enable_int();
-	PROCESS_0* p_son = &proc_fork->pcb;
-	p_son->statu = INITING;
+	PROCESS_0* p_son;
+	DISABLE_INT();
+		memcpy(proc_fork, p_fa, sizeof(PROCESS_0)); // 先将pcb和内核栈全拷贝过去，然后再进行修改
+		p_son = &proc_fork->pcb;
+		p_son->statu = INITING;
+	ENABLE_INT();
 	/* 分配页表 */
 	page_table_copy(p_fa, p_son);
 	/* 其他需要初始化的内容 */
 	p_son->lock = 0;
 	p_son->pid = alloc_pid();
-	p_son->priority = p_son->ticks = 1;
+	kprintf("%d fork %d, ", p_fa->pid, p_son->pid);
+	p_son->priority = p_fa->priority;
+	p_son->ticks = 0;
 	p_son->user_regs.eax = 0;
 
 	// 别忘了维护进程树，将这对父子进程关系添加进去
 	// panic("Unimplement! maintain process tree");
+	while (xchg(&p_fa->lock, 1) == 1)
+		schedule();
+
 	/* 父子节点 */
 	p_son->fork_tree.p_fa = p_fa;
 	/* 兄弟节点 */
@@ -85,13 +89,16 @@ kern_fork(PROCESS_0 *p_fa)
 		new_son_node->pre = p_fa->fork_tree.sons->pre; // 头插法
 		new_son_node->nxt = p_fa->fork_tree.sons; 
 		p_fa->fork_tree.sons->pre = new_son_node;
+		p_fa->fork_tree.sons = new_son_node;
+		assert(p_fa->fork_tree.sons->pre == NULL);
 	}
+	xchg(&p_fa->lock, 0);
+	/* 清空被fork进程的sons  debug了好久... */ 
+	p_son->fork_tree.sons = NULL;
 
 	// 最后你需要将子进程的状态置为READY，说明fork已经好了，子进程准备就绪了
 	// panic("Unimplement! change status to READY");
-	disable_int();
-		xchg(&p_son->lock, 0); // 关掉子进程的一把大锁
-		xchg(&p_fa->lock, 0); // 关掉父进程的一把大锁
+	DISABLE_INT();
 		p_son->statu = READY;
 		// kern regs
 		p_son->kern_regs.esp = (u32)(proc_fork + 1) - 8;
@@ -99,7 +106,7 @@ kern_fork(PROCESS_0 *p_fa)
 		*(u32 *)(p_son->kern_regs.esp + 0) = (u32)restart;
 		// 这里是因为restart要用`pop esp`确认esp该往哪里跳。
 		*(u32 *)(p_son->kern_regs.esp + 4) = (u32)p_son;
-	enable_int();
+	ENABLE_INT();
 
 	// 在你写完fork代码时先别急着运行跑，先要对自己来个灵魂拷问
 	// 1. 上锁上了吗？所有临界情况都考虑到了吗？（永远要相信有各种奇奇怪怪的并发问题）
