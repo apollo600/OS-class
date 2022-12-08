@@ -228,14 +228,6 @@ page_table_copy(PROCESS_0* src_pcb, PROCESS_0* dst_pcb) {
 		dst_pcb->cr3 = dst_cr3;
 		dst_pcb->page_list = dst_page_list;
 	enable_int();
-	kprintf("\ncheck_son: ");
-	u32 count = 0;
-	p = dst_pcb->page_list;
-	while (p != NULL) {
-		if (p->laddr != -1 && p->laddr < 3 * GB)
-			count++;
-		p = p->nxt;
-	} 
-	kprintf("%d ", count);
+	kprintf("\n");
 }
 
