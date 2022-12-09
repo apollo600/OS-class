@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "Makefrag": "makefile",
+        "*.asm": "asm-intel-x86-generic",
+        "process.h": "c"
+    }
+}
