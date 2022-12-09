@@ -64,11 +64,6 @@ lin_mapping_phy(u32			cr3,
 			warn("this page was mapped before, laddr: %x", laddr);
 		assert(PGOFF(paddr) == 0);
 		page_phy = paddr;
-		struct page_node *new_node = kmalloc(sizeof(struct page_node));
-		new_node->nxt = *page_list;
-		new_node->paddr = paddr;
-		new_node->laddr = laddr;
-		*page_list = new_node;
 	}
 	pte_ptr[PTX(laddr)] = page_phy | pte_flag;
 }

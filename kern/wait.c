@@ -117,7 +117,7 @@ kern_wait(int *wstatus)
 	DISABLE_INT();
 		// 释放分配的虚拟空间
 		lcr3(p_zombie->cr3);
-		recycle_pages(p_zombie->page_list);
+		recycle_pages(p_zombie->page_list); // 该函数只会回收分配的物理地址，但是页表部分从线性地址到物理的映射没有回收
 		lcr3(p_fa->cr3);
 		free_pid(p_zombie->pid);
 		p_zombie->statu = IDLE;

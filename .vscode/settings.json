@@ -1,7 +1,11 @@
 {
     "files.associations": {
-        "Makefrag": "makefile",
+        ".bochsrc": "yaml",
         "*.asm": "asm-intel-x86-generic",
-        "process.h": "c"
+        "Makefrag": "makefile",
+        "process.h": "c",
+        "kmalloc.h": "c",
+        "stdio.h": "c",
+        "sche.h": "c"
     }
 }

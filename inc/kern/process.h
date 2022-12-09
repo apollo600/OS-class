@@ -99,7 +99,7 @@ extern PROCESS	proc_table[];
 // pid的数量
 #define PID_COUNT 	32768
 // pid表
-static u32 pid_map[PID_COUNT];
+static u32 pid_map[PID_COUNT + 1];
 // 回收pid时的延时数量
 #define PID_DELAY	20
 

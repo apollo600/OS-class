@@ -21,8 +21,6 @@ kern_fork(PROCESS_0 *p_fa)
 	PROCESS* proc_fork = get_empty_process();
 	if (proc_fork == NULL) {
 		return -EAGAIN;
-	} else {
-		memset(proc_fork, 0, sizeof(PROCESS)); // 清空
 	}
 
 	/* Step2: 拷贝父进程的pcb，页表到子进程 */
@@ -40,7 +38,7 @@ kern_fork(PROCESS_0 *p_fa)
 	p_son->pid = alloc_pid();
 	kprintf("%d fork %d, ", p_fa->pid, p_son->pid);
 	p_son->priority = p_fa->priority;
-	p_son->ticks = 1; // 如果给为1,testwait的sleep会出错；如果给为0,会一直抢占时间片
+	p_son->ticks = p_fa->ticks; 
 	p_son->user_regs.eax = 0;
 
 	/* Step3: 维护进程树 */
@@ -49,6 +47,8 @@ kern_fork(PROCESS_0 *p_fa)
 
 	// 父子节点
 	p_son->fork_tree.p_fa = p_fa;
+	// 清空被fork进程的sons  debug了好久...
+	p_son->fork_tree.sons = NULL;
 	// 兄弟节点
 	if (p_fa->fork_tree.sons == NULL) {
 		// 如果之前没有子节点
@@ -68,8 +68,6 @@ kern_fork(PROCESS_0 *p_fa)
 	}
 	assert(p_fa->fork_tree.sons->pre == NULL);
 	xchg(&p_fa->lock, 0);
-	// 清空被fork进程的sons  debug了好久...
-	p_son->fork_tree.sons = NULL;
 
 	/* Step4: 将子进程的状态设为READY，开始运行子进程 */
 	DISABLE_INT();

@@ -1,6 +1,8 @@
 #include <assert.h>
 #include <mmu.h>
 #include <x86.h>
+#include <errno.h>
+#include <string.h>
 
 #include <kern/stdio.h>
 #include <kern/kmalloc.h>
@@ -9,6 +11,8 @@
 
 static u32 phy_malloc_4k_lock;
 static phyaddr_t phy_malloc_4k_p = 96 * MB;
+// 用分配pid的方法维护物理地址表
+static u32 phy_table[PHY_BLOCK_COUNT + 1];
 
 /*
  * 释放物理页面，这里并没有为你实现好free_4k的代码，
@@ -19,6 +23,16 @@ void
 phy_free_4k(phyaddr_t paddr)
 {
 	assert(paddr % PGSIZE == 0);
+	// 转换为块号
+	u32 new_table_id = ((paddr - PHY_START_ADDR) / PGSIZE) + 1;
+	assert(new_table_id <= PHY_BLOCK_COUNT);
+	// 表操作
+	u32 old_table_id = phy_table[0];
+	assert(old_table_id <= PHY_BLOCK_COUNT);
+	u32 old_next_table_id = phy_table[old_table_id];
+	// 这两句将要恢复的块插入到分配队列第一个的后面
+	phy_table[old_table_id] = new_table_id; 
+	phy_table[new_table_id] = old_next_table_id; 
 }
 /*
  * 分配物理页面，每次分配4kb，一页
@@ -30,9 +44,18 @@ phy_malloc_4k(void)
 	while(xchg(&phy_malloc_4k_lock, 1) == 1)
 		schedule();
 	
-	assert(phy_malloc_4k_p < 128 * MB);
-	phyaddr_t paddr = phy_malloc_4k_p;
-	phy_malloc_4k_p += PGSIZE;
+	// 表操作
+	u32 this_block_index = phy_table[0];
+	assert(this_block_index <= PHY_BLOCK_COUNT);
+	if (phy_table[this_block_index] == 0) {
+		panic("malloc run out");
+	} else {
+		phy_table[0] = phy_table[this_block_index];
+		phy_table[this_block_index] = 0;
+	}
+	// 转换为地址
+	phyaddr_t paddr = PHY_START_ADDR + (this_block_index - 1) * PGSIZE;
+	assert(paddr < 128 * MB);
 free:
 	xchg(&phy_malloc_4k_lock, 0);
 	return paddr;
@@ -121,4 +144,12 @@ kmalloc(size_t n)
 free:
 	xchg(&malloc_lock, 0);
 	return ret;
+}
+
+void init_km(void) {
+	u32 i;
+	for (i = 0; i < PHY_BLOCK_COUNT; i++) {
+		phy_table[i] = i + 1;
+	}
+	phy_table[PHY_BLOCK_COUNT] = 1;
 }
