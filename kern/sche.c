@@ -22,9 +22,16 @@ schedule(void)
 			goto free;
 		in_sche = true;
 
+		u32 activate_index = 1;
 		do {
-			if (++p_next_proc >= proc_table + PCB_SIZE)
+			if (++p_next_proc >= proc_table + PCB_SIZE) {
 				p_next_proc = proc_table;
+				if (activate_index < PCB_SIZE && proc_table[activate_index].pcb.statu == SLEEP)
+					proc_table[activate_index++].pcb.statu = READY;
+				else
+					asm volatile("sti\n\thlt\n\tcli":::"memory");
+			}
+				
 			if (p_cur_proc == p_next_proc && 
 					p_next_proc->pcb.statu != READY) {
 				asm volatile("sti\n\thlt\n\tcli":::"memory");
