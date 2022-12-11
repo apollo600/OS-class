@@ -25,25 +25,26 @@ kern_fork(PROCESS_0 *p_fa)
 
 	/* Step2: 拷贝父进程的pcb，页表到子进程 */
 	PROCESS_0* p_son = &proc_fork->pcb;
-	DISABLE_INT();
-		p_son->kern_regs = p_fa->kern_regs;
-		p_son->user_regs = p_fa->user_regs;
-		p_son->lock = 0;
-		p_son->statu = INITING;
-	ENABLE_INT();
+	// TODO 这里的中断是没必要加的，换成加锁
+	while (xchg(&p_fa->lock, 1) == 1)
+		schedule();
+	p_son->kern_regs = p_fa->kern_regs;
+	p_son->user_regs = p_fa->user_regs;
+	p_son->lock = 0;
+	p_son->statu = INITING;
 	// 分配页表
 	page_table_copy(p_fa, p_son);
 	// 其他需要初始化的内容
 	p_son->exit_code = 0;
 	p_son->pid = alloc_pid();
-	kprintf("%d fork %d, ", p_fa->pid, p_son->pid);
+	// kprintf("%d fork %d, ", p_fa->pid, p_son->pid);
 	p_son->priority = p_fa->priority;
-	p_son->ticks = p_fa->ticks; 
+	p_son->ticks = p_fa->ticks;
 	p_son->user_regs.eax = 0;
 
 	/* Step3: 维护进程树 */
-	while (xchg(&p_fa->lock, 1) == 1)
-		schedule();
+	// while (xchg(&p_fa->lock, 1) == 1)
+	// 	schedule();
 
 	// 父子节点
 	p_son->fork_tree.p_fa = p_fa;
@@ -67,18 +68,17 @@ kern_fork(PROCESS_0 *p_fa)
 		p_fa->fork_tree.sons = new_son_node;
 	}
 	assert(p_fa->fork_tree.sons->pre == NULL);
-	xchg(&p_fa->lock, 0);
 
 	/* Step4: 将子进程的状态设为READY，开始运行子进程 */
-	DISABLE_INT();
-		p_son->statu = READY;
-		// kern regs
-		p_son->kern_regs.esp = (u32)(proc_fork + 1) - 8;
-		// 保证切换内核栈后执行流进入的是restart函数。
-		*(u32 *)(p_son->kern_regs.esp + 0) = (u32)restart;
-		// 这里是因为restart要用`pop esp`确认esp该往哪里跳。
-		*(u32 *)(p_son->kern_regs.esp + 4) = (u32)p_son;
-	ENABLE_INT();
+	// kern regs
+	p_son->kern_regs.esp = (u32)(proc_fork + 1) - 8;
+	// 保证切换内核栈后执行流进入的是restart函数。
+	*(u32 *)(p_son->kern_regs.esp + 0) = (u32)restart;
+	// 这里是因为restart要用`pop esp`确认esp该往哪里跳。
+	*(u32 *)(p_son->kern_regs.esp + 4) = (u32)p_son;
+	// 将子进程设为就绪状态
+	p_son->statu = READY;
+	xchg(&p_fa->lock, 0);
 
 	/* Step5: 灵魂拷问 */
 	// 1. 上锁上了吗？所有临界情况都考虑到了吗？（永远要相信有各种奇奇怪怪的并发问题）

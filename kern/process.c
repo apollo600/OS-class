@@ -55,6 +55,7 @@ get_empty_process(void) {
 	while (proc_current != proc_table) {
 		// 加锁取数据
 		// kprintf("%d | ", proc_current->pcb.ticks);
+		// TODO 这里可以去掉加锁吗
 		while (xchg(&proc_current->pcb.lock, 1) == 1)
 			schedule();
 		if (proc_current->pcb.statu == IDLE) {

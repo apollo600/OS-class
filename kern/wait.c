@@ -36,50 +36,56 @@ kern_wait(int *wstatus)
 	// 3. 是否所有的资源都正确回收了？
 	// 4. 你写的代码真的符合wait语义吗？
 
-	// 1. 遍历所有子进程，找到状态是ZOMBIE的进程
-	// 2. 将其回收，返回pid
-	// 3. 如果没有子进程呢
-	/* 给父进程加锁 */
+	/* Step1: 判断父进程是否有子进程 */
 	while (xchg(&p_proc_ready->pcb.lock, 1) == 1)
 		schedule();
-	/* 如果没有子进程 */
+	// // 如果没有子进程
 	if (p_proc_ready->pcb.fork_tree.sons == NULL) {
 		xchg(&p_proc_ready->pcb.lock, 0);
 		return -ECHILD;
 	}
-	xchg(&p_proc_ready->pcb.lock, 0);
 
+	/* Step2: 遍历当前进程的所有子进程，找僵尸进程 */
 	PROCESS_0* p_fa = &p_proc_ready->pcb;
 	struct son_node* p = p_fa->fork_tree.sons;
-
+	
 	while (true) {
 		// 检测父进程是否正常运行
 		if ((p_fa->statu != READY) && (p_fa->statu != SLEEP)) {
+			xchg(&p_proc_ready->pcb.lock, 0);
 			return -EEXIST;
 		}
 		// 遍历了一次没找到
 		if (p == NULL) {
 			p = p_fa->fork_tree.sons;
-			p_fa->statu = SLEEP;
+			xchg(&p_proc_ready->pcb.lock, 0); // 执行别的进程，可以暂时把锁放开
 			schedule();
+			while (xchg(&p_proc_ready->pcb.lock, 1) == 1)
+				schedule(); // 把锁上回来
 		}
 		// 回收该进程
 		if (p->p_son->statu == ZOMBIE) {
-			kprintf("%d kill %d, ", p_fa->pid, p->p_son->pid);
-			// DISABLE_INT();
-			// p->p_son->priority = p->p_son->ticks = 0;
-			// ENABLE_INT();
+			// kprintf("%d kill %d, ", p_fa->pid, p->p_son->pid);
 			break;
 		}
+		// 下一个进程
 		p = p->nxt;
 	}
 
+	/* Step3: 回收僵尸进程 */
 	PROCESS_0* p_zombie = p->p_son;
-	// 由于需要修改父进程和该子进程，先加父进程锁，再加子进程锁
-	while (xchg(&p_fa->lock, 1) == 1)
-		schedule();
-	while (xchg(&p_zombie->lock, 1) == 1)
-		schedule();
+	// 修改成了一起加锁的模式，减少死锁的概率
+// 	while (1) {
+// 		if (xchg(&p_zombie->lock, 1) == 1)
+// 			goto loop;
+// 		if (xchg(&p_fa->lock, 1) == 1)
+// 			goto free;
+// 		break;
+// free:
+// 		xchg(&p_zombie->lock, 0);
+// loop:
+// 		schedule();
+// 	}
 	u32 ret = p_zombie->pid;
 	// 更新进程树
 	assert(p_fa->fork_tree.sons->pre == NULL);
@@ -107,7 +113,6 @@ kern_wait(int *wstatus)
 			p->nxt->pre = p->pre;
 		}
 	}
-	kfree(p);
 	if (p_fa->fork_tree.sons != NULL)
 		assert(p_fa->fork_tree.sons->pre == NULL);
 	// 返回状态值
@@ -115,23 +120,28 @@ kern_wait(int *wstatus)
 		*wstatus = p_zombie->exit_code;
 	// 进行释放
 	DISABLE_INT();
-		// 释放分配的虚拟空间
+		// 回收分配的物理地址
 		lcr3(p_zombie->cr3);
-		recycle_pages(p_zombie->page_list); // 该函数只会回收分配的物理地址，但是页表部分从线性地址到物理的映射没有回收
+		recycle_pages(p_zombie->page_list);
 		lcr3(p_fa->cr3);
-		free_pid(p_zombie->pid);
-		p_zombie->statu = IDLE;
 		p_zombie->cr3 = 0;
-		p_zombie->exit_code = 0;
-		p_zombie->fork_tree.p_fa = NULL;
-		p_zombie->fork_tree.sons = NULL;
-		xchg(&p_zombie->lock, 0);
-		p_zombie->pid = 0;
-		p_zombie->priority = 0;
-		p_zombie->ticks = 0;
-		p_fa->statu = READY;
 	ENABLE_INT();
-	xchg(&p_fa->lock, 0); // 记得解锁
+	// 其他值设置
+	p_zombie->exit_code = 0;
+	p_zombie->fork_tree.p_fa = NULL;
+	p_zombie->fork_tree.sons = NULL;
+	p_zombie->priority = 0;
+	p_zombie->ticks = 0;
+	// 回收pid
+	free_pid(p_zombie->pid);
+	p_zombie->pid = 0;
+	// 最后设置进程状态
+	p_zombie->statu = IDLE;
+	// p_fa->statu = READY;
+
+	kfree(p);
+	xchg(&p_fa->lock, 0);
+	// xchg(&p_zombie->lock, 0);
 	return ret;
 }
 

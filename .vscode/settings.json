@@ -6,6 +6,7 @@
         "process.h": "c",
         "kmalloc.h": "c",
         "stdio.h": "c",
-        "sche.h": "c"
+        "sche.h": "c",
+        "trap.h": "c"
     }
 }
