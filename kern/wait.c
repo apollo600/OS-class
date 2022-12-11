@@ -58,6 +58,7 @@ kern_wait(int *wstatus)
 		// 遍历了一次没找到
 		if (p == NULL) {
 			p = p_fa->fork_tree.sons;
+			p_fa->statu = SLEEP; // 这一句可以过掉wait_is_sleeping的测试，但是会在后面让系统卡住
 			xchg(&p_proc_ready->pcb.lock, 0); // 执行别的进程，可以暂时把锁放开
 			schedule();
 			while (xchg(&p_proc_ready->pcb.lock, 1) == 1)
@@ -137,7 +138,7 @@ kern_wait(int *wstatus)
 	p_zombie->pid = 0;
 	// 最后设置进程状态
 	p_zombie->statu = IDLE;
-	// p_fa->statu = READY;
+	// p_proc_ready->pcb.statu = READY;
 
 	kfree(p);
 	xchg(&p_fa->lock, 0);
