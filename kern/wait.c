@@ -58,8 +58,10 @@ kern_wait(int *wstatus)
 		// 遍历了一次没找到
 		if (p == NULL) {
 			p = p_fa->fork_tree.sons;
-			p_fa->statu = SLEEP;
+			DISABLE_INT();
 			xchg(&p_proc_ready->pcb.lock, 0); // 执行别的进程，可以暂时把锁放开
+			p_fa->statu = SLEEP;
+			ENABLE_INT();
 			schedule();
 			while (xchg(&p_proc_ready->pcb.lock, 1) == 1)
 				schedule(); // 把锁上回来
